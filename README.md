@@ -21,6 +21,7 @@ Every project note carries these in its frontmatter:
 
 ```yaml
 code: EDG                 # 3-letter call sign shown on the building
+name: "Edge AI Home Lab"  # optional short display name; the note title is used when absent
 northstar: "One line on what the project is building."
 progress: 60              # 0 to 100. One floor per 10%.
 lane: ready               # ready | waiting | blocked   (landed is derived from status: completed)

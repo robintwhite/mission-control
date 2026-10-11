@@ -94,7 +94,7 @@ def collect(vault, today):
                 if not fm or fm.get("type") != "project":
                     continue
                 rel = os.path.relpath(path, vault).replace(os.sep, "/")[:-3]
-                name = title_of(body, fn[:-3])
+                name = str(fm.get("name") or "") or title_of(body, re.sub(r"\s+MOC$", "", fn[:-3]))
                 status = str(fm.get("status", "")).lower()
                 if status == "complete":
                     status = "completed"
