@@ -1,0 +1,171 @@
+#!/usr/bin/env python3
+"""Build Mission Control: one standalone HTML page of every project in Robin's vault.
+
+Reads the frontmatter of every `type: project` note under Projects/ and Archive/,
+injects the data and an inlined three.js into the template, and writes
+`<vault>/00 Home/Mission Control.html`.
+
+Standard library only. No installs needed.
+
+    python build.py                 # auto-detects the vault (E:\ or D:\, or MC_VAULT)
+    python build.py --vault PATH    # explicit vault
+    python build.py --out FILE      # write somewhere else
+    python build.py --check         # parse and report, write nothing
+"""
+import argparse, json, os, re, sys, datetime
+
+HERE = os.path.dirname(os.path.abspath(__file__))
+TEMPLATE = os.path.join(HERE, "template", "mission-control.template.html")
+THREE = os.path.join(HERE, "vendor", "three.min.js")
+VAULT_NAME = "robin-personal"
+CANDIDATES = [os.environ.get("MC_VAULT", ""), r"E:\ObsidianVaults\robin-personal", r"D:\ObsidianVaults\robin-personal",
+              os.path.expanduser("~/mnt/robin-personal")]
+LANES = {"ready", "waiting", "blocked", "landed"}
+STALE_DAYS = 30
+
+
+def find_vault(explicit):
+    for c in ([explicit] if explicit else []) + CANDIDATES:
+        if c and os.path.isdir(os.path.join(c, "Projects")):
+            return os.path.abspath(c)
+    sys.exit("Vault not found. Pass --vault or set MC_VAULT.")
+
+
+def parse_frontmatter(text):
+    """Minimal YAML: `key: value` lines, quoted or bare scalars, `[a, b]` lists, `- item` lists. Enough for this vault."""
+    if not text.startswith("---"):
+        return None, text
+    end = text.find("\n---", 3)
+    if end < 0:
+        return None, text
+    fm, body = text[4:end], text[end + 4:]
+    out, key = {}, None
+    for line in fm.splitlines():
+        if not line.strip():
+            continue
+        m = re.match(r"^([A-Za-z_][\w-]*):\s*(.*)$", line)
+        if m:
+            key, val = m.group(1), m.group(2).strip()
+            if val == "":
+                out[key] = []  # may become a `- item` list
+            elif val.startswith("[") and val.endswith("]"):
+                out[key] = [v.strip().strip('"\'') for v in val[1:-1].split(",") if v.strip()]
+            else:
+                if (val.startswith('"') and val.endswith('"')) or (val.startswith("'") and val.endswith("'")):
+                    val = val[1:-1].replace('\\"', '"')
+                out[key] = val
+        elif line.lstrip().startswith("- ") and key is not None and isinstance(out.get(key), list):
+            out[key].append(line.lstrip()[2:].strip().strip('"\''))
+    return out, body
+
+
+def title_of(body, fallback):
+    for line in body.splitlines():
+        if line.startswith("# "):
+            t = line[2:].strip()
+            t = re.sub(r"^[^\w\[]+", "", t)  # drop a leading emoji
+            t = re.sub(r"\s+MOC$", "", t)
+            t = t.replace("Project ", "", 1) if t.startswith("Project ") else t
+            return t.strip()
+    return fallback
+
+
+def slug(s):
+    return re.sub(r"[^a-z0-9]+", "-", s.lower()).strip("-")
+
+
+def collect(vault, today):
+    projects, warnings = [], []
+    for top in ("Projects", "Archive"):
+        root = os.path.join(vault, top)
+        if not os.path.isdir(root):
+            continue
+        for dirpath, _, files in os.walk(root):
+            for fn in files:
+                if not fn.endswith(".md"):
+                    continue
+                path = os.path.join(dirpath, fn)
+                try:
+                    text = open(path, encoding="utf-8").read()
+                except Exception as e:
+                    warnings.append(f"unreadable {path}: {e}")
+                    continue
+                fm, body = parse_frontmatter(text)
+                if not fm or fm.get("type") != "project":
+                    continue
+                rel = os.path.relpath(path, vault).replace(os.sep, "/")[:-3]
+                name = title_of(body, fn[:-3])
+                status = str(fm.get("status", "")).lower()
+                if status == "complete":
+                    status = "completed"
+                lane = str(fm.get("lane", "")).lower() or ("landed" if status == "completed" else "")
+                if status == "completed":
+                    lane = "landed"
+                if lane not in LANES:
+                    warnings.append(f"{rel}: lane '{lane}' missing or invalid (ready|waiting|blocked|landed); skipped")
+                    continue
+                try:
+                    progress = int(float(fm.get("progress", 100 if lane == "landed" else 0)))
+                except ValueError:
+                    warnings.append(f"{rel}: progress not a number; using 0")
+                    progress = 0
+                progress = max(0, min(100, progress))
+                if lane == "landed":
+                    progress = 100
+                code = str(fm.get("code") or "").upper() or slug(name)[:3].upper()
+                updated = str(fm.get("updated") or fm.get("completed") or fm.get("created") or "")
+                stale = 0
+                if lane != "landed" and re.match(r"^\d{4}-\d{2}-\d{2}$", updated):
+                    d = (today - datetime.date.fromisoformat(updated)).days
+                    stale = d if d > STALE_DAYS else 0
+                for k in ("northstar", "next"):
+                    if lane != "landed" and not fm.get(k):
+                        warnings.append(f"{rel}: '{k}' is empty")
+                projects.append({
+                    "id": str(fm.get("project") or slug(name)),
+                    "code": code, "name": name, "lane": lane, "progress": progress,
+                    "north": str(fm.get("northstar") or ""), "next": str(fm.get("next") or ""),
+                    "wait": str(fm.get("waiting_on") or ""), "updated": updated,
+                    "completed": str(fm.get("completed") or ""), "stale": stale,
+                    "area": str(fm.get("area") or ""), "note": rel,
+                    "link": "obsidian://open?vault=" + VAULT_NAME + "&file=" + quote(rel),
+                })
+    projects.sort(key=lambda p: (["ready", "waiting", "blocked", "landed"].index(p["lane"]), -p["progress"], p["name"]))
+    return projects, warnings
+
+
+def quote(s):
+    from urllib.parse import quote as q
+    return q(s, safe="")
+
+
+def main():
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--vault")
+    ap.add_argument("--out")
+    ap.add_argument("--check", action="store_true")
+    a = ap.parse_args()
+    vault = find_vault(a.vault)
+    today = datetime.date.today()
+    projects, warnings = collect(vault, today)
+    for w in warnings:
+        print("warning:", w)
+    counts = {l: sum(p["lane"] == l for p in projects) for l in ("ready", "waiting", "blocked", "landed")}
+    floors = sum(int(p["progress"] / 10 + 0.5) for p in projects)  # same rounding as the page (Math.round)
+    print(f"{len(projects)} projects: {counts}; {floors} floors built, city level {1 + floors // 30}")
+    if a.check:
+        return
+    tpl = open(TEMPLATE, encoding="utf-8").read()
+    three = open(THREE, encoding="utf-8").read()
+    data = "const PROJECTS=" + json.dumps(projects, ensure_ascii=False) + ";"
+    html = (tpl.replace("/*THREE*/", three, 1).replace("/*DATA*/", data, 1)
+            .replace("{{BUILD_DATE}}", today.isoformat()).replace("{{COUNT}}", str(len(projects))))
+    out = a.out or os.path.join(vault, "00 Home", "Mission Control.html")
+    os.makedirs(os.path.dirname(out), exist_ok=True)
+    with open(out, "w", encoding="utf-8", newline="\n") as f:
+        f.write(html)
+    print("wrote", out, f"({os.path.getsize(out) // 1024} KB)")
+
+
+if __name__ == "__main__":
+    main()
