@@ -38,7 +38,7 @@ header .sub{font-family:var(--mono);font-size:12px;color:var(--dim);letter-spaci
 .lbl.on{font-family:var(--display);font-weight:700;font-size:14px;color:#fff;background:rgba(11,6,24,.85);border:1px solid var(--pink);padding:3px 8px}
 .bay{display:grid;grid-template-columns:minmax(0,1.3fr) minmax(0,1fr);gap:14px}
 @media (max-width:900px){.bay{grid-template-columns:1fr}}
-.detail{background:var(--panel);border:1px solid var(--line);padding:16px 18px;display:grid;gap:10px;min-width:0;position:relative}
+.detail{background:var(--panel);border:1px solid var(--line);padding:16px 18px;display:grid;gap:10px;align-content:start;min-width:0;position:relative}
 .detail::before{content:"";position:absolute;left:0;top:0;bottom:0;width:3px;background:linear-gradient(var(--cyan),var(--pink))}
 .detail .eyebrow{font-family:var(--mono);font-size:11px;letter-spacing:.2em;color:var(--dim)}
 .detail h2{margin:0;font-size:26px;font-weight:700;line-height:1.1;text-wrap:balance}
@@ -76,14 +76,40 @@ header .sub{font-family:var(--mono);font-size:12px;color:var(--dim);letter-spaci
 .card .m i::after{content:"";position:absolute;inset:0;width:var(--p);background:var(--c)}
 .stale{color:var(--red);font-family:var(--mono);font-size:11px;letter-spacing:.1em}
 footer{font-family:var(--mono);font-size:11px;color:var(--dim);letter-spacing:.08em}
+/* live refresh bar */
+.bar{display:flex;flex-wrap:wrap;align-items:flex-start;gap:8px 12px;font-family:var(--mono);font-size:11px;letter-spacing:.12em;min-height:28px}
+.bar button{font-family:var(--mono);font-size:11px;letter-spacing:.15em;color:var(--cyan);background:rgba(11,6,24,.78);border:1px solid var(--line);padding:6px 10px;cursor:pointer}
+.bar button:hover:not(:disabled){border-color:var(--cyan)}
+.bar button:disabled{color:var(--dim);cursor:default;opacity:.6}
+.bar button.go{color:var(--fg);border-color:var(--pink);box-shadow:0 0 10px rgba(255,60,172,.35)}
+.bar button:focus-visible{outline:1px solid var(--cyan);outline-offset:2px}
+.src{color:var(--dim);min-width:0;padding-top:7px}
+.src b{font-weight:400;color:var(--green)}
+.src.snap b{color:var(--gold)}
+.src.err b{color:var(--red)}
+.warn{margin-left:auto;max-width:100%}
+.warn summary{width:max-content;margin-left:auto}
+.warn summary{cursor:pointer;list-style:none;color:var(--dim);padding:6px 10px;border:1px solid var(--line)}
+.warn summary::-webkit-details-marker{display:none}
+.warn.has summary{color:var(--orange);border-color:var(--orange)}
+.warn summary:focus-visible{outline:1px solid var(--cyan);outline-offset:2px}
+.warn ul{margin:4px 0 0;padding:10px 14px;list-style:none;display:grid;gap:6px;background:var(--panel);border:1px solid var(--line);width:min(560px,calc(100vw - 32px));box-sizing:border-box;max-height:320px;overflow:auto;font-size:12px;letter-spacing:.02em;color:var(--fg);overflow-wrap:anywhere}
+.warn li::before{content:"▸ ";color:var(--orange)}
+@media (max-width:600px){.city .key{display:none}}
 @media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
 </style>
 <div class="wrap">
   <header>
     <h1>Mission Control</h1>
-    <span class="sub">ROBIN'S PROJECTS · BUILT {{BUILD_DATE}} · {{COUNT}} BUILDINGS</span>
+    <span class="sub" id="sub">ROBIN'S PROJECTS</span>
     <div class="counts" id="counts"></div>
   </header>
+  <div class="bar">
+    <button id="connect" type="button" hidden>CONNECT VAULT</button>
+    <button id="refresh" type="button" hidden disabled>⟳ REFRESH</button>
+    <span class="src snap" id="src" role="status"></span>
+    <details class="warn" id="warn"><summary id="warnsum">0 WARNINGS</summary><ul id="warnlist"></ul></details>
+  </div>
   <div class="city" id="city">
     <div class="hud" id="hud"></div>
     <div class="key">
@@ -106,7 +132,7 @@ footer{font-family:var(--mono);font-size:11px;color:var(--dim);letter-spacing:.0
     </div>
   </div>
   <div class="cards" id="cards"></div>
-  <footer>EVERYTHING HERE COMES FROM EACH PROJECT NOTE'S FRONTMATTER (northstar, progress, lane, next, waiting_on). EDIT THE NOTE, THEN RUN build.bat OR ASK CLAUDE TO REBUILD.</footer>
+  <footer>EVERYTHING HERE COMES FROM EACH PROJECT NOTE'S FRONTMATTER (northstar, progress, lane, kind, size, next, waiting_on). EDIT THE NOTE, THEN PRESS REFRESH. THE PAGE READS THE VAULT ITSELF ONCE CONNECTED.</footer>
 </div>
 <script>
 /*THREE*/
@@ -115,126 +141,142 @@ footer{font-family:var(--mono);font-size:11px;color:var(--dim);letter-spacing:.0
 /*DATA*/
 </script>
 <script>
+/*PARSER*/
+</script>
+<script>
 const C={ready:"#2cf4ff",waiting:"#ffb347",blocked:"#ff4d6d",parked:"#7f8fb3",landed:"#5dffb0"};
 const ZONE={ready:"INNER RING",waiting:"OUTER RING",blocked:"FAR CORNER",parked:"OUTER RING",landed:"DOWNTOWN CORE"};
 const LANE={ready:"READY TO FLY",waiting:"WAITING ON ME",blocked:"BLOCKED",parked:"PARKED",landed:"LANDED"};
-const order=["ready","waiting","blocked","parked","landed"].filter(l=>l!=="parked"||PROJECTS.some(p=>p.lane==="parked"));
-const byLane=l=>PROJECTS.filter(p=>p.lane===l).sort((a,b)=>b.progress-a.progress);
-const floorsOf=p=>Math.round(p.progress/10);
-document.getElementById("counts").innerHTML=order.map(l=>`<div class="c-${l}"><b>${byLane(l).length}</b>${LANE[l]}</div>`).join("");
-
-// ---------- city level ----------
-const FLOORS_BUILT=PROJECTS.reduce((s,p)=>s+floorsOf(p),0);
-const FLOORS_TOTAL=PROJECTS.length*10;
-const PER_LEVEL=30;
-const LEVEL=1+Math.floor(FLOORS_BUILT/PER_LEVEL);
-const NEXT_AT=LEVEL*PER_LEVEL;
 const UNLOCKS=[[1,"Roads and the downtown core"],[2,"Streetlights downtown and on the inner ring"],[3,"Inner-ring infill begins, first parks"],[4,"Monorail loop around the core"],[5,"Outer-ring infill, holo billboards"],[6,"Downtown skyline towers"],[7,"Streetlights reach the far corners"],[8,"Second monorail line"]];
-document.getElementById("hud").innerHTML=`<div class="lvl"><b>LVL ${LEVEL}</b><span>CITY LEVEL</span></div><div class="xp"><i style="--p:${((FLOORS_BUILT-(LEVEL-1)*PER_LEVEL)/PER_LEVEL*100).toFixed(0)}%"></i></div><div class="xpl"><span>${FLOORS_BUILT} FLOORS BUILT</span><span>LVL ${LEVEL+1} AT ${NEXT_AT}</span></div><div class="unl">${NEXT_AT-FLOORS_BUILT} floors to go. Next: <em>${UNLOCKS[LEVEL]?UNLOCKS[LEVEL][1]:"everything built"}</em></div>`;
-document.getElementById("unlocks").innerHTML=UNLOCKS.map(([n,t])=>`<li class="${n<=LEVEL?"done":n===LEVEL+1?"next":""}"><b>LVL ${n}</b><span>${n<=LEVEL?"✓ ":n===LEVEL+1?"▸ ":""}${t}</span></li>`).join("");
+const PER_LEVEL=30;
+const $=id=>document.getElementById(id);
+const esc=s=>String(s).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const floorsOf=p=>Math.round(p.progress/10);
+let PROJECTS=[],WARNINGS=[],LEVEL=1,selected=null;
+const byLane=l=>PROJECTS.filter(p=>p.lane===l).sort((a,b)=>b.progress-a.progress);
 
-// ---------- panels ----------
-const cards=document.getElementById("cards");
-order.forEach(l=>byLane(l).forEach(p=>{const b=document.createElement("button");b.className="card";b.dataset.id=p.id;
-  b.innerHTML=`<div class="t"><span>${p.name}</span><small>${p.code}${p.stale?` <span class="stale">STALE</span>`:""}</small></div><div class="n">${p.north}</div><div class="m"><i style="--p:${p.progress}%;--c:${C[p.lane]}"></i><span style="color:${C[p.lane]}">${p.progress}%</span></div>`;
-  b.addEventListener("click",()=>select(p.id));cards.appendChild(b)}));
-document.getElementById("attn").innerHTML=PROJECTS.filter(p=>p.wait).map(p=>`<li data-id="${p.id}"><b style="color:${C[p.lane]}">${p.code}</b><span><strong>${p.name}:</strong> ${p.wait}</span></li>`).join("");
-document.getElementById("attn").addEventListener("click",e=>{const li=e.target.closest("li");if(li)select(li.dataset.id)});
-let selected=null;
-function select(id){selected=id;const p=PROJECTS.find(x=>x.id===id);const n=floorsOf(p);
+// ---------- panels: counts, HUD, cards, attention list, warnings ----------
+function renderPanels(){
+  const order=["ready","waiting","blocked","parked","landed"].filter(l=>l!=="parked"||PROJECTS.some(p=>p.lane==="parked"));
+  $("sub").textContent=`ROBIN'S PROJECTS · ${PROJECTS.length} BUILDINGS`;
+  $("counts").innerHTML=order.map(l=>`<div class="c-${l}"><b>${byLane(l).length}</b>${LANE[l]}</div>`).join("");
+  const built=PROJECTS.reduce((s,p)=>s+floorsOf(p),0);
+  LEVEL=1+Math.floor(built/PER_LEVEL);
+  const nextAt=LEVEL*PER_LEVEL;
+  $("hud").innerHTML=`<div class="lvl"><b>LVL ${LEVEL}</b><span>CITY LEVEL</span></div><div class="xp"><i style="--p:${((built-(LEVEL-1)*PER_LEVEL)/PER_LEVEL*100).toFixed(0)}%"></i></div><div class="xpl"><span>${built} FLOORS BUILT</span><span>LVL ${LEVEL+1} AT ${nextAt}</span></div><div class="unl">${nextAt-built} floors to go. Next: <em>${UNLOCKS[LEVEL]?UNLOCKS[LEVEL][1]:"everything built"}</em></div>`;
+  $("unlocks").innerHTML=UNLOCKS.map(([n,t])=>`<li class="${n<=LEVEL?"done":n===LEVEL+1?"next":""}"><b>LVL ${n}</b><span>${n<=LEVEL?"✓ ":n===LEVEL+1?"▸ ":""}${t}</span></li>`).join("");
+  const cards=$("cards");cards.replaceChildren();
+  order.forEach(l=>byLane(l).forEach(p=>{const b=document.createElement("button");b.type="button";b.className="card";b.dataset.id=p.id;
+    b.innerHTML=`<div class="t"><span>${esc(p.name)}</span><small>${esc(p.code)}${p.stale?` <span class="stale">STALE</span>`:""}</small></div><div class="n">${esc(p.north)}</div><div class="m"><i style="--p:${p.progress}%;--c:${C[p.lane]}"></i><span style="color:${C[p.lane]}">${p.progress}%</span></div>`;
+    b.addEventListener("click",()=>select(p.id,true));cards.appendChild(b)}));
+  $("attn").innerHTML=PROJECTS.filter(p=>p.wait).map(p=>`<li data-id="${esc(p.id)}"><b style="color:${C[p.lane]}">${esc(p.code)}</b><span><strong>${esc(p.name)}:</strong> ${esc(p.wait)}</span></li>`).join("")||`<li style="cursor:default"><b>·</b><span>Nothing is waiting on you.</span></li>`;
+  const w=$("warn");w.classList.toggle("has",WARNINGS.length>0);
+  $("warnsum").textContent=WARNINGS.length?`⚠ ${WARNINGS.length} WARNING${WARNINGS.length>1?"S":""}`:"0 WARNINGS";
+  $("warnlist").innerHTML=WARNINGS.length?WARNINGS.map(x=>`<li>${esc(x)}</li>`).join(""):`<li>All project notes have the fields the dashboard needs.</li>`;
+}
+$("attn").addEventListener("click",e=>{const li=e.target.closest("li[data-id]");if(li)select(li.dataset.id,true)});
+function select(id,focus){const p=PROJECTS.find(x=>x.id===id);
+  if(!p){selected=null;$("detail").innerHTML=`<div class="eyebrow">NO BUILDINGS</div><h2>No project notes found</h2><div class="north">Check the warnings, or that the connected folder is the vault.</div>`;return}
+  selected=id;const n=floorsOf(p);
   document.querySelectorAll(".card").forEach(c=>c.classList.toggle("sel",c.dataset.id===id));
-  document.getElementById("detail").innerHTML=`<div class="eyebrow">BUILDING ${p.code} · ${ZONE[p.lane]}</div><h2>${p.name}</h2><span class="flag f-${p.lane}">${LANE[p.lane]}</span><div class="north">${p.north}</div>
+  $("detail").innerHTML=`<div class="eyebrow">BUILDING ${esc(p.code)} · ${ZONE[p.lane]}</div><h2>${esc(p.name)}</h2><span class="flag f-${p.lane}">${LANE[p.lane]}</span><div class="north">${esc(p.north)}</div>
     <div class="floors">${Array.from({length:10},(_,i)=>`<i class="${i<n?"on":""}"></i>`).join("")}</div>
     <div class="meterline"><span>${n} OF 10 FLOORS BUILT${p.lane!=="landed"?` · ${10-n} MORE = +${10-n} CITY XP`:""}</span><b>${p.progress}%</b></div>
-    <dl class="kv"><dt>NEXT</dt><dd>${p.next||"Topped out "+(p.completed||"")}</dd>${p.wait?`<dt>WAITING</dt><dd style="color:var(--orange)">${p.wait}</dd>`:""}<dt>UPDATED</dt><dd style="font-family:var(--mono)">${p.updated}${p.stale?` · <span class="stale">${p.stale} DAYS, STALE</span>`:""}</dd><dt>NOTE</dt><dd><a href="${p.link}">Open in Obsidian</a></dd></dl>`;
-  if(window.focusBuilding)focusBuilding(id);
+    <dl class="kv"><dt>NEXT</dt><dd>${esc(p.next||"Topped out "+(p.completed||""))}</dd>${p.wait?`<dt>WAITING</dt><dd style="color:var(--orange)">${esc(p.wait)}</dd>`:""}<dt>UPDATED</dt><dd style="font-family:var(--mono)">${esc(p.updated)}${p.stale?` · <span class="stale">${p.stale} DAYS, STALE</span>`:""}</dd><dt>NOTE</dt><dd><a href="${esc(p.link)}">Open in Obsidian</a></dd></dl>`;
+  if(focus&&window.focusBuilding)focusBuilding(id);
 }
 
-// ---------- 3D ----------
+// ---------- 3D: the fixed scene (sky, ground) is made once; the city is rebuilt on every render ----------
 function mulberry(a){return function(){a|=0;a=a+0x6D2B79F5|0;let t=Math.imul(a^a>>>15,1|a);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296}}
-const rnd=mulberry(20261010);
-const host=document.getElementById("city");
+const host=$("city");
 const reduce=matchMedia("(prefers-reduced-motion: reduce)").matches;
 const renderer=new THREE.WebGLRenderer({antialias:true});renderer.setPixelRatio(Math.min(devicePixelRatio,2));host.prepend(renderer.domElement);
 const scene=new THREE.Scene();scene.background=new THREE.Color(0x0b0618);scene.fog=new THREE.Fog(0x0b0618,80,190);
 const camera=new THREE.PerspectiveCamera(38,1,.1,500);
 scene.add(new THREE.AmbientLight(0x6a4bb0,.9));const key=new THREE.DirectionalLight(0xff3cac,.5);key.position.set(-30,40,20);scene.add(key);const fill=new THREE.DirectionalLight(0x2cf4ff,.4);fill.position.set(40,30,-30);scene.add(fill);
-// sun + stars
-(function(){const c=document.createElement("canvas");c.width=c.height=512;const g=c.getContext("2d");const grd=g.createLinearGradient(0,0,0,512);grd.addColorStop(0,"#ffd166");grd.addColorStop(.5,"#ff3cac");grd.addColorStop(1,"#9b5cff");g.fillStyle=grd;g.beginPath();g.arc(256,256,240,0,Math.PI*2);g.fill();g.fillStyle="#0b0618";for(let i=0;i<7;i++)g.fillRect(0,300+i*26,512,4+i*2);
+(function(){const rnd=mulberry(20261010);const c=document.createElement("canvas");c.width=c.height=512;const g=c.getContext("2d");const grd=g.createLinearGradient(0,0,0,512);grd.addColorStop(0,"#ffd166");grd.addColorStop(.5,"#ff3cac");grd.addColorStop(1,"#9b5cff");g.fillStyle=grd;g.beginPath();g.arc(256,256,240,0,Math.PI*2);g.fill();g.fillStyle="#0b0618";for(let i=0;i<7;i++)g.fillRect(0,300+i*26,512,4+i*2);
   const s=new THREE.Sprite(new THREE.SpriteMaterial({map:new THREE.CanvasTexture(c),transparent:true,fog:false}));s.scale.set(110,110,1);s.position.set(0,34,-190);scene.add(s);
   const pos=[];for(let i=0;i<700;i++){const r=200+rnd()*60,a=rnd()*Math.PI*2,b=rnd()*1.2;pos.push(Math.cos(a)*Math.cos(b)*r,Math.sin(b)*r+5,Math.sin(a)*Math.cos(b)*r)}const geo=new THREE.BufferGeometry();geo.setAttribute("position",new THREE.Float32BufferAttribute(pos,3));scene.add(new THREE.Points(geo,new THREE.PointsMaterial({color:0xf3e9ff,size:.9,fog:false})))})();
 const ground=new THREE.Mesh(new THREE.PlaneGeometry(500,500),new THREE.MeshBasicMaterial({color:0x07030f}));ground.rotation.x=-Math.PI/2;ground.position.y=-.02;scene.add(ground);
 const grid=new THREE.GridHelper(400,100,0xff3cac,0x2cf4ff);grid.material.opacity=.18;grid.material.transparent=true;scene.add(grid);
 
-// ---------- city plan: 5x5 blocks, each 2x2 lots ----------
 const LOT=4.6,ROAD=3.2,BLOCKS=5,PITCH=2*LOT+ROAD,FLOOR=1.7,FLOORS=10;
-const lots=[];
-for(let bi=0;bi<BLOCKS;bi++)for(let bj=0;bj<BLOCKS;bj++)for(let li=0;li<2;li++)for(let lj=0;lj<2;lj++){const x=(bi-2)*PITCH+(li-.5)*LOT,z=(bj-2)*PITCH+(lj-.5)*LOT;lots.push({bi,bj,ring:Math.max(Math.abs(bi-2),Math.abs(bj-2)),corner:Math.abs(bi-2)===2&&Math.abs(bj-2)===2,x,z,d:Math.hypot(x,z),used:null})}
-function take(cands,list){const byBlock={};cands.forEach(l=>{const k=l.bi+","+l.bj;(byBlock[k]=byBlock[k]||[]).push(l)});const blocks=Object.values(byBlock).map(b=>b.sort((a,c)=>a.d-c.d));blocks.sort((a,b)=>a[0].d-b[0].d);let i=0;list.forEach(p=>{let tries=0;while(tries<200){const b=blocks[i%blocks.length];i++;tries++;const free=b.find(l=>!l.used);if(free){free.used=p;break}}})}
-take(lots.filter(l=>l.ring===0),byLane("landed"));
-take(lots.filter(l=>l.ring===1),byLane("ready"));
-take(lots.filter(l=>l.ring===2&&l.corner),byLane("blocked"));
-take(lots.filter(l=>l.ring===2&&!l.corner),byLane("waiting"));
-take(lots.filter(l=>l.ring===2&&!l.corner),byLane("parked"));
-// infill by level
-const infill={1:Math.min(.95,Math.max(0,(LEVEL-2)*.32)),2:Math.min(.8,Math.max(0,(LEVEL-4)*.25))};
-const parks=LEVEL>=3?2:0;let parksLeft=parks;
-lots.forEach(l=>{if(l.used||l.ring===0)return;const r=rnd();if(l.ring===1&&parksLeft>0&&r<.12){l.used="park";parksLeft--;return}if(r<(infill[l.ring]||0))l.used="fill";else if(l.ring===2&&r<(infill[2]||0)+.15)l.used="rubble";else l.used="zoned"});
-
-const buildings=[],labels=[],pickables=[];
+let city=null,buildings=[],labels=[],pickables=[],cars=[],trains=[];
+function disposeCity(){if(!city)return;scene.remove(city);
+  city.traverse(o=>{if(o.geometry)o.geometry.dispose();const ms=Array.isArray(o.material)?o.material:o.material?[o.material]:[];ms.forEach(m=>{if(m.map)m.map.dispose();if(m.emissiveMap&&m.emissiveMap!==m.map)m.emissiveMap.dispose();m.dispose()})});
+  labels.forEach(L=>L.el.remove());city=null;buildings=[];labels=[];pickables=[];cars=[];trains=[]}
 function windowTex(hex,lit,seed){const r=mulberry(seed);const c=document.createElement("canvas");c.width=64;c.height=64;const g=c.getContext("2d");g.fillStyle="#120826";g.fillRect(0,0,64,64);g.fillStyle=hex;for(let y=0;y<4;y++)for(let x=0;x<4;x++){if(r()<lit){g.globalAlpha=.5+r()*.5;g.fillRect(6+x*15,6+y*15,8,9)}}const t=new THREE.CanvasTexture(c);t.wrapS=t.wrapT=THREE.RepeatWrapping;return t}
-function lotOutline(l,hex,op){const e=new THREE.LineSegments(new THREE.EdgesGeometry(new THREE.PlaneGeometry(LOT-.5,LOT-.5)),new THREE.LineBasicMaterial({color:hex,transparent:true,opacity:op}));e.rotation.x=-Math.PI/2;e.position.set(l.x,.02,l.z);scene.add(e)}
 
-lots.forEach((l,idx)=>{
-  if(l.used&&l.used.id){const p=l.used,lane=p.lane,col=new THREE.Color(C[lane]);const n=floorsOf(p);const h=(p.code.charCodeAt(0)+p.code.charCodeAt(2))%5;const fw=2.6+h*.22,fd=2.6+((h*3)%5)*.18;
-    const grp=new THREE.Group();grp.position.set(l.x,0,l.z);lotOutline(l,C[lane],.5);
-    const tex=windowTex(C[lane],lane==="landed"?.85:.5,idx+7);tex.repeat.set(1,Math.max(1,n));
-    if(n>0){const box=new THREE.Mesh(new THREE.BoxGeometry(fw,n*FLOOR,fd),new THREE.MeshStandardMaterial({map:tex,emissive:col,emissiveMap:tex,emissiveIntensity:1.1,color:0x1a0f33,roughness:.6}));box.position.y=n*FLOOR/2;grp.add(box);const ed=new THREE.LineSegments(new THREE.EdgesGeometry(box.geometry),new THREE.LineBasicMaterial({color:col}));ed.position.copy(box.position);grp.add(ed)}
-    const left=FLOORS-n;if(left>0){const scaf=new THREE.LineSegments(new THREE.EdgesGeometry(new THREE.BoxGeometry(fw+.3,left*FLOOR,fd+.3)),new THREE.LineBasicMaterial({color:col,transparent:true,opacity:.55}));scaf.position.y=n*FLOOR+left*FLOOR/2;grp.add(scaf);
-      for(let f=1;f<left;f++){const ring=new THREE.LineSegments(new THREE.EdgesGeometry(new THREE.PlaneGeometry(fw+.3,fd+.3)),new THREE.LineBasicMaterial({color:col,transparent:true,opacity:.22}));ring.rotation.x=-Math.PI/2;ring.position.y=n*FLOOR+f*FLOOR;grp.add(ring)}
-      const slab=new THREE.Mesh(new THREE.BoxGeometry(fw,.18,fd),new THREE.MeshBasicMaterial({color:col,transparent:true,opacity:.5}));slab.position.y=n*FLOOR+.1;grp.add(slab)}
-    let crane=null;if(lane==="ready"&&n<FLOORS){crane=new THREE.Group();const H=FLOORS*FLOOR+3;const mast=new THREE.Mesh(new THREE.BoxGeometry(.25,H,.25),new THREE.MeshBasicMaterial({color:0xffe14d}));mast.position.y=H/2;crane.add(mast);const jib=new THREE.Group();jib.position.y=H;const arm=new THREE.Mesh(new THREE.BoxGeometry(5.5,.18,.18),new THREE.MeshBasicMaterial({color:0xffe14d}));arm.position.x=1.6;jib.add(arm);const hook=new THREE.Mesh(new THREE.BoxGeometry(.12,2.2,.12),new THREE.MeshBasicMaterial({color:0xffe14d}));hook.position.set(3.6,-1.1,0);jib.add(hook);const load=new THREE.Mesh(new THREE.BoxGeometry(.7,.5,.7),new THREE.MeshBasicMaterial({color:col}));load.position.set(3.6,-2.4,0);jib.add(load);const lamp=new THREE.Mesh(new THREE.SphereGeometry(.18,8,8),new THREE.MeshBasicMaterial({color:0xff4d6d}));lamp.position.y=H+.3;crane.add(lamp);crane.add(jib);crane.jib=jib;crane.position.set(fw/2+.6,0,-fd/2-.6);grp.add(crane)}
-    let beacon=null;if(lane!=="ready"){beacon=new THREE.Mesh(new THREE.SphereGeometry(.28,10,10),new THREE.MeshBasicMaterial({color:col}));beacon.position.y=FLOORS*FLOOR+.6;grp.add(beacon);
-      if(lane==="landed"){const spire=new THREE.Mesh(new THREE.BoxGeometry(.12,2.6,.12),new THREE.MeshBasicMaterial({color:col}));spire.position.y=FLOORS*FLOOR+1.3;grp.add(spire);beacon.position.y=FLOORS*FLOOR+2.8}
-      if(lane==="blocked"){const tape=new THREE.LineSegments(new THREE.EdgesGeometry(new THREE.BoxGeometry(fw+1.2,.01,fd+1.2)),new THREE.LineDashedMaterial({color:col,dashSize:.4,gapSize:.3}));tape.computeLineDistances();tape.position.y=.05;grp.add(tape)}}
-    const hit=new THREE.Mesh(new THREE.BoxGeometry(fw+.6,FLOORS*FLOOR+1,fd+.6),new THREE.MeshBasicMaterial({visible:false}));hit.position.y=(FLOORS*FLOOR+1)/2;hit.userData.id=p.id;grp.add(hit);pickables.push(hit);
-    const ring=new THREE.Mesh(new THREE.RingGeometry(fw*.9,fw*.9+.35,32),new THREE.MeshBasicMaterial({color:0xff3cac,side:THREE.DoubleSide,transparent:true,opacity:0}));ring.rotation.x=-Math.PI/2;ring.position.y=.03;grp.add(ring);
-    scene.add(grp);const b={p,grp,crane,beacon,ring,top:FLOORS*FLOOR+3,n};buildings.push(b);
-    const lbl=document.createElement("div");lbl.className="lbl";lbl.textContent=p.code;host.appendChild(lbl);labels.push({el:lbl,b});
-  } else if(l.used==="fill"){const fl=l.ring===1?2+Math.floor(rnd()*5):1+Math.floor(rnd()*2);const fw=2+rnd()*1.4,fd=2+rnd()*1.4;const tex=windowTex("#8c6bd8",.35,idx+99);tex.repeat.set(1,fl);const m=new THREE.Mesh(new THREE.BoxGeometry(fw,fl*FLOOR*.8,fd),new THREE.MeshStandardMaterial({map:tex,emissive:0x6a4bb0,emissiveMap:tex,emissiveIntensity:.7,color:0x140a2a,roughness:.7}));m.position.set(l.x+(rnd()-.5)*.8,fl*FLOOR*.4,l.z+(rnd()-.5)*.8);scene.add(m);const e=new THREE.LineSegments(new THREE.EdgesGeometry(m.geometry),new THREE.LineBasicMaterial({color:0x5a3a9a}));e.position.copy(m.position);scene.add(e)}
-  else if(l.used==="park"){const g=new THREE.Mesh(new THREE.PlaneGeometry(LOT-.6,LOT-.6),new THREE.MeshBasicMaterial({color:0x0e3a2a}));g.rotation.x=-Math.PI/2;g.position.set(l.x,.03,l.z);scene.add(g);lotOutline(l,"#5dffb0",.4);for(let t=0;t<5;t++){const tr=new THREE.Mesh(new THREE.ConeGeometry(.45,1.4,6),new THREE.MeshBasicMaterial({color:0x3ddc97}));tr.position.set(l.x+(rnd()-.5)*3,.7,l.z+(rnd()-.5)*3);scene.add(tr)}}
-  else if(l.used==="rubble"){lotOutline(l,"#3a1f6b",.35);for(let t=0;t<3;t++){const rb=new THREE.Mesh(new THREE.BoxGeometry(.6+rnd(),.3+rnd()*.4,.6+rnd()),new THREE.MeshBasicMaterial({color:0x1d1040}));rb.position.set(l.x+(rnd()-.5)*2.5,.2,l.z+(rnd()-.5)*2.5);rb.rotation.y=rnd()*3;scene.add(rb)}}
-  else if(l.used==="zoned"){lotOutline(l,"#3a1f6b",.25)}
-});
-// roads: lines along block gaps
-(function(){const half=BLOCKS*PITCH/2;const mat=new THREE.LineBasicMaterial({color:0x2cf4ff,transparent:true,opacity:.35});const pts=[];for(let k=0;k<=BLOCKS;k++){const c=(k-2.5)*PITCH;[-ROAD/2,ROAD/2].forEach(o=>{pts.push(new THREE.Vector3(c+o,.01,-half),new THREE.Vector3(c+o,.01,half));pts.push(new THREE.Vector3(-half,.01,c+o),new THREE.Vector3(half,.01,c+o))})}
-  const g=new THREE.BufferGeometry().setFromPoints(pts);scene.add(new THREE.LineSegments(g,mat));
-  // streetlights by level: ring r lit when LEVEL >= r+2 (far corners need 7)
-  lots.forEach(l=>{const litLevel=l.corner?7:l.ring+2;if(LEVEL<litLevel)return;const sx=l.x+(l.bi<2?-1:1)*(LOT/2-.2),sz=l.z+(l.bj<2?-1:1)*(LOT/2-.2);const pole=new THREE.Mesh(new THREE.BoxGeometry(.08,2.2,.08),new THREE.MeshBasicMaterial({color:0x5a3a9a}));pole.position.set(sx,1.1,sz);scene.add(pole);const lamp=new THREE.Mesh(new THREE.SphereGeometry(.14,6,6),new THREE.MeshBasicMaterial({color:0xffd166}));lamp.position.set(sx,2.3,sz);scene.add(lamp)});
-})();
-// monorail at level 4
-const trains=[];if(LEVEL>=4){const R=PITCH*1.45,H=FLOORS*FLOOR*.55;const curve=new THREE.EllipseCurve(0,0,R,R,0,Math.PI*2,false,0);const pts=curve.getPoints(96).map(p=>new THREE.Vector3(p.x,H,p.y));scene.add(new THREE.Line(new THREE.BufferGeometry().setFromPoints(pts),new THREE.LineBasicMaterial({color:0xff3cac})));
-  for(let k=0;k<12;k++){const a=k/12*Math.PI*2;const pylon=new THREE.Mesh(new THREE.BoxGeometry(.18,H,.18),new THREE.MeshBasicMaterial({color:0x5a3a9a}));pylon.position.set(Math.cos(a)*R,H/2,Math.sin(a)*R);scene.add(pylon)}
-  for(let c=0;c<3;c++){const car=new THREE.Mesh(new THREE.BoxGeometry(1.6,.5,.6),new THREE.MeshBasicMaterial({color:0xff3cac}));scene.add(car);trains.push({m:car,off:c*.06,R,H})}}
-// traffic
-const cars=[];(function(){const half=BLOCKS*PITCH/2;for(let i=0;i<14;i++){const horiz=i%2===0;const k=Math.floor(rnd()*(BLOCKS+1));const c=(k-2.5)*PITCH+(rnd()<.5?-.9:.9);const m=new THREE.Mesh(new THREE.BoxGeometry(horiz?.9:.45,.3,horiz?.45:.9),new THREE.MeshBasicMaterial({color:i%3?0xff3cac:0x2cf4ff}));const s=(rnd()-.5)*2*half;if(horiz)m.position.set(s,.2,c);else m.position.set(c,.2,s);scene.add(m);cars.push({m,horiz,v:(rnd()<.5?-1:1)*(5+rnd()*5),half})}})();
+function buildCity(){
+  disposeCity();city=new THREE.Group();scene.add(city);
+  const rnd=mulberry(20261011);
+  // city plan: 5x5 blocks, each 2x2 lots
+  const lots=[];
+  for(let bi=0;bi<BLOCKS;bi++)for(let bj=0;bj<BLOCKS;bj++)for(let li=0;li<2;li++)for(let lj=0;lj<2;lj++){const x=(bi-2)*PITCH+(li-.5)*LOT,z=(bj-2)*PITCH+(lj-.5)*LOT;lots.push({bi,bj,ring:Math.max(Math.abs(bi-2),Math.abs(bj-2)),corner:Math.abs(bi-2)===2&&Math.abs(bj-2)===2,x,z,d:Math.hypot(x,z),used:null})}
+  // fill a zone block by block, nearest first; returns the projects that did not fit
+  function take(cands,list){const byBlock={};cands.forEach(l=>{const k=l.bi+","+l.bj;(byBlock[k]=byBlock[k]||[]).push(l)});const blocks=Object.values(byBlock).map(b=>b.sort((a,c)=>a.d-c.d));blocks.sort((a,b)=>a[0].d-b[0].d);let i=0;const left=[];
+    list.forEach(p=>{let placed=false;for(let tries=0;tries<blocks.length*4&&!placed;tries++){const b=blocks[i%blocks.length];i++;const free=b.find(l=>!l.used);if(free){free.used=p;placed=true}}if(!placed)left.push(p)});return left}
+  const spill=[
+    ...take(lots.filter(l=>l.ring===0),byLane("landed")),
+    ...take(lots.filter(l=>l.ring===1),byLane("ready")),
+    ...take(lots.filter(l=>l.ring===2&&l.corner),byLane("blocked")),
+    ...take(lots.filter(l=>l.ring===2&&!l.corner),byLane("waiting")),
+    ...take(lots.filter(l=>l.ring===2&&!l.corner),byLane("parked"))];
+  // a zone that is full (e.g. a fifth landed project with four core lots) spills to the nearest free lot
+  spill.forEach(p=>{const free=lots.filter(l=>!l.used).sort((a,b)=>a.d-b.d)[0];if(free)free.used=p});
+  const infill={1:Math.min(.95,Math.max(0,(LEVEL-2)*.32)),2:Math.min(.8,Math.max(0,(LEVEL-4)*.25))};
+  let parksLeft=LEVEL>=3?2:0;
+  lots.forEach(l=>{if(l.used||l.ring===0)return;const r=rnd();if(l.ring===1&&parksLeft>0&&r<.12){l.used="park";parksLeft--;return}if(r<(infill[l.ring]||0))l.used="fill";else if(l.ring===2&&r<(infill[2]||0)+.15)l.used="rubble";else l.used="zoned"});
+  function lotOutline(l,hex,op){const e=new THREE.LineSegments(new THREE.EdgesGeometry(new THREE.PlaneGeometry(LOT-.5,LOT-.5)),new THREE.LineBasicMaterial({color:hex,transparent:true,opacity:op}));e.rotation.x=-Math.PI/2;e.position.set(l.x,.02,l.z);city.add(e)}
+  lots.forEach((l,idx)=>{
+    if(l.used&&l.used.id){const p=l.used,lane=p.lane,col=new THREE.Color(C[lane]);const n=floorsOf(p);const cc=(p.code+"   ").toUpperCase();const h=(cc.charCodeAt(0)+cc.charCodeAt(2))%5;const fw=2.6+h*.22,fd=2.6+((h*3)%5)*.18;
+      const grp=new THREE.Group();grp.position.set(l.x,0,l.z);lotOutline(l,C[lane],.5);
+      const tex=windowTex(C[lane],lane==="landed"?.85:.5,idx+7);tex.repeat.set(1,Math.max(1,n));
+      if(n>0){const box=new THREE.Mesh(new THREE.BoxGeometry(fw,n*FLOOR,fd),new THREE.MeshStandardMaterial({map:tex,emissive:col,emissiveMap:tex,emissiveIntensity:1.1,color:0x1a0f33,roughness:.6}));box.position.y=n*FLOOR/2;grp.add(box);const ed=new THREE.LineSegments(new THREE.EdgesGeometry(box.geometry),new THREE.LineBasicMaterial({color:col}));ed.position.copy(box.position);grp.add(ed)}else tex.dispose();
+      const left=FLOORS-n;if(left>0){const scaf=new THREE.LineSegments(new THREE.EdgesGeometry(new THREE.BoxGeometry(fw+.3,left*FLOOR,fd+.3)),new THREE.LineBasicMaterial({color:col,transparent:true,opacity:.55}));scaf.position.y=n*FLOOR+left*FLOOR/2;grp.add(scaf);
+        for(let f=1;f<left;f++){const ring=new THREE.LineSegments(new THREE.EdgesGeometry(new THREE.PlaneGeometry(fw+.3,fd+.3)),new THREE.LineBasicMaterial({color:col,transparent:true,opacity:.22}));ring.rotation.x=-Math.PI/2;ring.position.y=n*FLOOR+f*FLOOR;grp.add(ring)}
+        const slab=new THREE.Mesh(new THREE.BoxGeometry(fw,.18,fd),new THREE.MeshBasicMaterial({color:col,transparent:true,opacity:.5}));slab.position.y=n*FLOOR+.1;grp.add(slab)}
+      let crane=null;if(lane==="ready"&&n<FLOORS){crane=new THREE.Group();const H=FLOORS*FLOOR+3;const mast=new THREE.Mesh(new THREE.BoxGeometry(.25,H,.25),new THREE.MeshBasicMaterial({color:0xffe14d}));mast.position.y=H/2;crane.add(mast);const jib=new THREE.Group();jib.position.y=H;const arm=new THREE.Mesh(new THREE.BoxGeometry(5.5,.18,.18),new THREE.MeshBasicMaterial({color:0xffe14d}));arm.position.x=1.6;jib.add(arm);const hook=new THREE.Mesh(new THREE.BoxGeometry(.12,2.2,.12),new THREE.MeshBasicMaterial({color:0xffe14d}));hook.position.set(3.6,-1.1,0);jib.add(hook);const load=new THREE.Mesh(new THREE.BoxGeometry(.7,.5,.7),new THREE.MeshBasicMaterial({color:col}));load.position.set(3.6,-2.4,0);jib.add(load);const lamp=new THREE.Mesh(new THREE.SphereGeometry(.18,8,8),new THREE.MeshBasicMaterial({color:0xff4d6d}));lamp.position.y=H+.3;crane.add(lamp);crane.add(jib);crane.jib=jib;crane.position.set(fw/2+.6,0,-fd/2-.6);grp.add(crane)}
+      let beacon=null;if(lane!=="ready"){beacon=new THREE.Mesh(new THREE.SphereGeometry(.28,10,10),new THREE.MeshBasicMaterial({color:col}));beacon.position.y=FLOORS*FLOOR+.6;grp.add(beacon);
+        if(lane==="landed"){const spire=new THREE.Mesh(new THREE.BoxGeometry(.12,2.6,.12),new THREE.MeshBasicMaterial({color:col}));spire.position.y=FLOORS*FLOOR+1.3;grp.add(spire);beacon.position.y=FLOORS*FLOOR+2.8}
+        if(lane==="blocked"){const tape=new THREE.LineSegments(new THREE.EdgesGeometry(new THREE.BoxGeometry(fw+1.2,.01,fd+1.2)),new THREE.LineDashedMaterial({color:col,dashSize:.4,gapSize:.3}));tape.computeLineDistances();tape.position.y=.05;grp.add(tape)}}
+      const hit=new THREE.Mesh(new THREE.BoxGeometry(fw+.6,FLOORS*FLOOR+1,fd+.6),new THREE.MeshBasicMaterial({visible:false}));hit.position.y=(FLOORS*FLOOR+1)/2;hit.userData.id=p.id;grp.add(hit);pickables.push(hit);
+      const ring=new THREE.Mesh(new THREE.RingGeometry(fw*.9,fw*.9+.35,32),new THREE.MeshBasicMaterial({color:0xff3cac,side:THREE.DoubleSide,transparent:true,opacity:0}));ring.rotation.x=-Math.PI/2;ring.position.y=.03;grp.add(ring);
+      city.add(grp);const b={p,grp,crane,beacon,ring,top:FLOORS*FLOOR+3,n};buildings.push(b);
+      const lbl=document.createElement("div");lbl.className="lbl";lbl.textContent=p.code;host.appendChild(lbl);labels.push({el:lbl,b});
+    } else if(l.used==="fill"){const fl=l.ring===1?2+Math.floor(rnd()*5):1+Math.floor(rnd()*2);const fw=2+rnd()*1.4,fd=2+rnd()*1.4;const tex=windowTex("#8c6bd8",.35,idx+99);tex.repeat.set(1,fl);const m=new THREE.Mesh(new THREE.BoxGeometry(fw,fl*FLOOR*.8,fd),new THREE.MeshStandardMaterial({map:tex,emissive:0x6a4bb0,emissiveMap:tex,emissiveIntensity:.7,color:0x140a2a,roughness:.7}));m.position.set(l.x+(rnd()-.5)*.8,fl*FLOOR*.4,l.z+(rnd()-.5)*.8);city.add(m);const e=new THREE.LineSegments(new THREE.EdgesGeometry(m.geometry),new THREE.LineBasicMaterial({color:0x5a3a9a}));e.position.copy(m.position);city.add(e)}
+    else if(l.used==="park"){const g=new THREE.Mesh(new THREE.PlaneGeometry(LOT-.6,LOT-.6),new THREE.MeshBasicMaterial({color:0x0e3a2a}));g.rotation.x=-Math.PI/2;g.position.set(l.x,.03,l.z);city.add(g);lotOutline(l,"#5dffb0",.4);for(let t=0;t<5;t++){const tr=new THREE.Mesh(new THREE.ConeGeometry(.45,1.4,6),new THREE.MeshBasicMaterial({color:0x3ddc97}));tr.position.set(l.x+(rnd()-.5)*3,.7,l.z+(rnd()-.5)*3);city.add(tr)}}
+    else if(l.used==="rubble"){lotOutline(l,"#3a1f6b",.35);for(let t=0;t<3;t++){const rb=new THREE.Mesh(new THREE.BoxGeometry(.6+rnd(),.3+rnd()*.4,.6+rnd()),new THREE.MeshBasicMaterial({color:0x1d1040}));rb.position.set(l.x+(rnd()-.5)*2.5,.2,l.z+(rnd()-.5)*2.5);rb.rotation.y=rnd()*3;city.add(rb)}}
+    else if(l.used==="zoned"){lotOutline(l,"#3a1f6b",.25)}
+  });
+  // roads, and streetlights by level: ring r lit when LEVEL >= r+2 (far corners need 7)
+  const half=BLOCKS*PITCH/2;const pts=[];for(let k=0;k<=BLOCKS;k++){const c=(k-2.5)*PITCH;[-ROAD/2,ROAD/2].forEach(o=>{pts.push(new THREE.Vector3(c+o,.01,-half),new THREE.Vector3(c+o,.01,half));pts.push(new THREE.Vector3(-half,.01,c+o),new THREE.Vector3(half,.01,c+o))})}
+  city.add(new THREE.LineSegments(new THREE.BufferGeometry().setFromPoints(pts),new THREE.LineBasicMaterial({color:0x2cf4ff,transparent:true,opacity:.35})));
+  lots.forEach(l=>{const litLevel=l.corner?7:l.ring+2;if(LEVEL<litLevel)return;const sx=l.x+(l.bi<2?-1:1)*(LOT/2-.2),sz=l.z+(l.bj<2?-1:1)*(LOT/2-.2);const pole=new THREE.Mesh(new THREE.BoxGeometry(.08,2.2,.08),new THREE.MeshBasicMaterial({color:0x5a3a9a}));pole.position.set(sx,1.1,sz);city.add(pole);const lamp=new THREE.Mesh(new THREE.SphereGeometry(.14,6,6),new THREE.MeshBasicMaterial({color:0xffd166}));lamp.position.set(sx,2.3,sz);city.add(lamp)});
+  // monorail at level 4
+  if(LEVEL>=4){const R=PITCH*1.45,H=FLOORS*FLOOR*.55;const curve=new THREE.EllipseCurve(0,0,R,R,0,Math.PI*2,false,0);const rp=curve.getPoints(96).map(p=>new THREE.Vector3(p.x,H,p.y));city.add(new THREE.Line(new THREE.BufferGeometry().setFromPoints(rp),new THREE.LineBasicMaterial({color:0xff3cac})));
+    for(let k=0;k<12;k++){const a=k/12*Math.PI*2;const pylon=new THREE.Mesh(new THREE.BoxGeometry(.18,H,.18),new THREE.MeshBasicMaterial({color:0x5a3a9a}));pylon.position.set(Math.cos(a)*R,H/2,Math.sin(a)*R);city.add(pylon)}
+    for(let c=0;c<3;c++){const car=new THREE.Mesh(new THREE.BoxGeometry(1.6,.5,.6),new THREE.MeshBasicMaterial({color:0xff3cac}));city.add(car);trains.push({m:car,off:c*.06,R,H})}}
+  // traffic
+  for(let i=0;i<14;i++){const horiz=i%2===0;const k=Math.floor(rnd()*(BLOCKS+1));const c=(k-2.5)*PITCH+(rnd()<.5?-.9:.9);const m=new THREE.Mesh(new THREE.BoxGeometry(horiz?.9:.45,.3,horiz?.45:.9),new THREE.MeshBasicMaterial({color:i%3?0xff3cac:0x2cf4ff}));const s=(rnd()-.5)*2*half;if(horiz)m.position.set(s,.2,c);else m.position.set(c,.2,s);city.add(m);cars.push({m,horiz,v:(rnd()<.5?-1:1)*(5+rnd()*5),half})}
+}
 
 // ---------- camera ----------
 let az=-.6,pol=1.06,rad=PITCH*BLOCKS*1.75,tgt=new THREE.Vector3(0,3,0),drag=null,spinOn=!reduce,idleAt=-1e9,spinV=reduce?0:.05,tgtGoal=null;
-const IDLE_MS=10000,spinBtn=document.getElementById("spin");
+const IDLE_MS=10000,spinBtn=$("spin");
 function setSpin(on){spinOn=on;if(on)idleAt=-1e9;spinBtn.setAttribute("aria-pressed",on);spinBtn.textContent=on?"⟳ SPIN ON":"■ SPIN OFF"}
 setSpin(spinOn);
 spinBtn.addEventListener("click",()=>setSpin(!spinOn));
-addEventListener("keydown",e=>{if(e.code!=="Space"||e.repeat)return;const tg=e.target;if(tg&&(tg.isContentEditable||/^(INPUT|TEXTAREA|SELECT|BUTTON|A)$/.test(tg.tagName)))return;e.preventDefault();setSpin(!spinOn)});
+addEventListener("keydown",e=>{if(e.code!=="Space"||e.repeat)return;const tg=e.target;if(tg&&(tg.isContentEditable||/^(INPUT|TEXTAREA|SELECT|BUTTON|A|SUMMARY)$/.test(tg.tagName)))return;e.preventDefault();setSpin(!spinOn)});
 function place(){camera.position.set(tgt.x+rad*Math.sin(pol)*Math.sin(az),tgt.y+rad*Math.cos(pol),tgt.z+rad*Math.sin(pol)*Math.cos(az));camera.lookAt(tgt)}
 const el=renderer.domElement;
+const ray=new THREE.Raycaster();let hoverId=null;
 el.addEventListener("pointerdown",e=>{drag={x:e.clientX,y:e.clientY,az,pol,moved:false};el.setPointerCapture(e.pointerId)});
 el.addEventListener("pointermove",e=>{if(drag){const dx=e.clientX-drag.x,dy=e.clientY-drag.y;if(Math.abs(dx)+Math.abs(dy)>3)drag.moved=true;az=drag.az-dx*.005;pol=Math.min(1.4,Math.max(.3,drag.pol-dy*.004));idleAt=performance.now();return}
   const r=el.getBoundingClientRect();const m=new THREE.Vector2(((e.clientX-r.left)/r.width)*2-1,-((e.clientY-r.top)/r.height)*2+1);ray.setFromCamera(m,camera);const h=ray.intersectObjects(pickables);hoverId=h.length?h[0].object.userData.id:null;el.style.cursor=hoverId?"pointer":"grab"});
 el.addEventListener("pointerup",e=>{if(drag&&!drag.moved)pick(e);drag=null});
 el.addEventListener("wheel",e=>{e.preventDefault();rad=Math.min(200,Math.max(25,rad*(1+Math.sign(e.deltaY)*.08)));idleAt=performance.now()},{passive:false});
-const ray=new THREE.Raycaster();let hoverId=null;
-function pick(e){const r=el.getBoundingClientRect();const m=new THREE.Vector2(((e.clientX-r.left)/r.width)*2-1,-((e.clientY-r.top)/r.height)*2+1);ray.setFromCamera(m,camera);const h=ray.intersectObjects(pickables);if(h.length)select(h[0].object.userData.id)}
+function pick(e){const r=el.getBoundingClientRect();const m=new THREE.Vector2(((e.clientX-r.left)/r.width)*2-1,-((e.clientY-r.top)/r.height)*2+1);ray.setFromCamera(m,camera);const h=ray.intersectObjects(pickables);if(h.length)select(h[0].object.userData.id,true)}
 window.focusBuilding=id=>{const b=buildings.find(x=>x.p.id===id);if(b)tgtGoal=b.grp.position.clone().setY(6)};
 function resize(){const w=host.clientWidth,h=host.clientHeight;renderer.setSize(w,h,false);camera.aspect=w/h;camera.updateProjectionMatrix()}
 addEventListener("resize",resize);resize();
@@ -249,6 +291,75 @@ function frame(now){const dt=Math.min(.05,(now-last)/1000||0);last=now;const t=n
   renderer.render(scene,camera);
   const r=el.getBoundingClientRect();labels.forEach(L=>{v.copy(L.b.grp.position);v.y=L.b.top+1.2;v.project(camera);const on=selected===L.b.p.id||hoverId===L.b.p.id;L.el.classList.toggle("on",on);L.el.textContent=on?L.b.p.name+" · "+L.b.p.progress+"%":L.b.p.code;const vis=v.z<1&&Math.abs(v.x)<1.1&&Math.abs(v.y)<1.1;L.el.style.display=vis?"block":"none";if(vis){L.el.style.left=((v.x+1)/2*r.width)+"px";L.el.style.top=((1-v.y)/2*r.height)+"px"}});
   requestAnimationFrame(frame)}
-requestAnimationFrame(frame);
-select((PROJECTS.find(p=>p.lane==="ready")||PROJECTS[0]).id);
+
+// ---------- render: everything that depends on the data. Called at load and after each refresh ----------
+function render(data){
+  PROJECTS=data.projects||[];WARNINGS=data.warnings||[];
+  renderPanels();buildCity();
+  const keep=selected&&PROJECTS.some(p=>p.id===selected);
+  select(keep?selected:(PROJECTS.find(p=>p.lane==="ready")||PROJECTS[0]||{}).id,!keep);
+}
+
+// ---------- live refresh: read the vault folder in the page (Chrome or Edge, File System Access API) ----------
+// The folder handle is kept in IndexedDB, so the folder is picked once per browser. Chrome may still ask
+// "Allow" once per session before the page can read it again; that click is the ALLOW VAULT ACCESS button.
+const LIVE_OK=BUILD.live&&typeof window.showDirectoryPicker==="function"&&window.isSecureContext;
+const connectBtn=$("connect"),refreshBtn=$("refresh"),src=$("src");
+let handle=null,mode="snapshot",lastRefresh=0,busy=false;
+const clock=d=>d.toLocaleTimeString([],{hour:"2-digit",minute:"2-digit",second:"2-digit"});
+function setSrc(kind,label,rest){src.className="src "+kind;src.innerHTML=`<b>${esc(label)}</b>${rest?" · "+esc(rest):""}`}
+const snapLabel=rest=>setSrc("snap","SNAPSHOT FROM "+SNAPSHOT.built,rest);
+function setButtons(){connectBtn.hidden=refreshBtn.hidden=!LIVE_OK;
+  connectBtn.textContent=!handle?"CONNECT VAULT":mode==="live"?"CHANGE VAULT":"ALLOW VAULT ACCESS";
+  connectBtn.classList.toggle("go",mode!=="live");refreshBtn.disabled=!handle||busy;
+  connectBtn.title=mode==="live"?"Pick a different vault folder":"Let this page read the vault folder";
+  refreshBtn.title="Re-read every project note in the vault";}
+function idb(){return new Promise((res,rej)=>{const r=indexedDB.open("mission-control",1);r.onupgradeneeded=()=>r.result.createObjectStore("kv");r.onsuccess=()=>res(r.result);r.onerror=()=>rej(r.error)})}
+async function idbGet(k){const db=await idb();try{return await new Promise((res,rej)=>{const r=db.transaction("kv").objectStore("kv").get(k);r.onsuccess=()=>res(r.result);r.onerror=()=>rej(r.error)})}finally{db.close()}}
+async function idbPut(k,val){const db=await idb();try{await new Promise((res,rej)=>{const t=db.transaction("kv","readwrite");t.objectStore("kv").put(val,k);t.oncomplete=res;t.onerror=()=>rej(t.error);t.onabort=()=>rej(t.error)})}finally{db.close()}}
+async function ask(h){try{return await h.requestPermission({mode:"read"})}catch(e){return "prompt"}}
+async function refresh(userClick){
+  if(!handle||busy)return;busy=true;setButtons();refreshBtn.textContent="⟳ READING…";
+  try{
+    let st=await handle.queryPermission({mode:"read"});
+    if(st!=="granted"&&userClick)st=await ask(handle);
+    if(st!=="granted"){mode="needs-permission";snapLabel(st==="denied"?"VAULT ACCESS NOT ALLOWED. CLICK ALLOW VAULT ACCESS TO TRY AGAIN":"CLICK ALLOW VAULT ACCESS TO GO LIVE");return}
+    const data=await MCParser.collectVault(handle,{vaultName:BUILD.vault});
+    const changed=JSON.stringify(data)!==JSON.stringify({projects:PROJECTS,warnings:WARNINGS});
+    if(changed)render(data);
+    const wasLive=mode==="live";mode="live";lastRefresh=Date.now();
+    setSrc("live","LIVE",`${handle.name} · REFRESHED ${clock(new Date())} · ${data.projects.length} PROJECT${data.projects.length===1?"":"S"}${wasLive&&!changed?" · NO CHANGES":""}`);
+  }catch(e){
+    setSrc("err","REFRESH FAILED",`${e.message||e.name} · SHOWING ${mode==="live"?"THE LAST REFRESH":"THE SNAPSHOT FROM "+SNAPSHOT.built}`);
+  }finally{busy=false;refreshBtn.textContent="⟳ REFRESH";setButtons()}
+}
+async function pickVault(){
+  let h;try{h=await window.showDirectoryPicker({id:"mc-vault",mode:"read"})}catch(e){if(e.name!=="AbortError")setSrc("err","FOLDER PICKER FAILED",e.message);return}
+  try{await h.getDirectoryHandle("Projects")}catch(e){setSrc("err","NOT THE VAULT",`"${h.name}" has no Projects folder. Pick the vault folder itself.`);return}
+  handle=h;mode="snapshot";
+  try{await idbPut("vault",h)}catch(e){/* not stored (e.g. private window): live for this visit only */}
+  await refresh(true);
+}
+connectBtn.addEventListener("click",async()=>{
+  if(handle&&mode!=="live"){const st=await ask(handle);if(st==="granted"){await refresh(true);return}
+    if(st==="denied"){handle=null;mode="snapshot";setButtons();snapLabel("VAULT ACCESS NOT ALLOWED. CLICK CONNECT VAULT TO PICK THE FOLDER AGAIN");return}
+    snapLabel("CLICK ALLOW VAULT ACCESS TO GO LIVE");return}
+  await pickVault();
+});
+refreshBtn.addEventListener("click",()=>refresh(true));
+document.addEventListener("visibilitychange",()=>{if(document.visibilityState==="visible"&&mode==="live"&&Date.now()-lastRefresh>30000)refresh(false)});
+async function boot(){
+  render(SNAPSHOT);
+  requestAnimationFrame(frame);
+  if(!BUILD.live){snapLabel("PHONE MIRROR. IT CANNOT READ THE VAULT");return}
+  if(!LIVE_OK){snapLabel("LIVE REFRESH NEEDS CHROME OR EDGE");return}
+  setButtons();snapLabel("CLICK CONNECT VAULT TO GO LIVE");
+  try{handle=window.MC_TEST_HANDLE||await idbGet("vault")||null}catch(e){handle=null}
+  if(!handle){setButtons();return}
+  let st="prompt";try{st=await handle.queryPermission({mode:"read"})}catch(e){}
+  if(st==="granted")await refresh(false);
+  else{mode="needs-permission";setButtons();snapLabel("CLICK ALLOW VAULT ACCESS TO GO LIVE")}
+}
+window.MC={render,refresh:()=>refresh(true),state:()=>({mode,lastRefresh,projects:PROJECTS,warnings:WARNINGS,level:LEVEL,buildings:buildings.length})};
+boot();
 </script>

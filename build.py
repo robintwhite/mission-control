@@ -1,26 +1,34 @@
 #!/usr/bin/env python3
-"""Build Mission Control: one standalone HTML page of every project in Robin's vault.
+r"""Build Mission Control: one standalone HTML page of every project in Robin's vault.
 
 Reads the frontmatter of every `type: project` note under Projects/ and Archive/,
-injects the data and an inlined three.js into the template, and writes
-`<vault>/00 Home/Mission Control.html`.
+injects that data (as a snapshot), the in-page vault parser and an inlined three.js
+into the template, and writes `<vault>/00 Home/Mission Control.html`.
+
+The page reads the vault itself once connected (Connect vault, then Refresh), using
+template/vault-parser.js. That file is a port of collect() below. Keep the two in step;
+tests/run_tests.mjs checks them against each other.
 
 Standard library only. No installs needed.
 
     python build.py                 # auto-detects the vault (E:\ or D:\, or MC_VAULT)
     python build.py --vault PATH    # explicit vault
     python build.py --out FILE      # write somewhere else
-    python build.py --check         # parse and report, write nothing
+    python build.py --check         # parse and report, write nothing (the weekly sweep uses this)
+    python build.py --mirror        # snapshot-only page for the artifact mirror (no Connect or Refresh)
+    python build.py --dump FILE     # also write the parsed projects and warnings as JSON (tests)
+    python build.py --today DATE    # pretend today is DATE (YYYY-MM-DD), for tests
 """
 import argparse, json, os, re, sys, datetime
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 TEMPLATE = os.path.join(HERE, "template", "mission-control.template.html")
+PARSER = os.path.join(HERE, "template", "vault-parser.js")
 THREE = os.path.join(HERE, "vendor", "three.min.js")
 VAULT_NAME = "robin-personal"
 CANDIDATES = [os.environ.get("MC_VAULT", ""), r"E:\ObsidianVaults\robin-personal", r"D:\ObsidianVaults\robin-personal",
               os.path.expanduser("~/mnt/robin-personal")]
-LANES = {"ready", "waiting", "blocked", "parked", "landed"}
+LANES = ["ready", "waiting", "blocked", "parked", "landed"]
 KINDS = {"software", "making", "hardware", "career", "athletics"}
 SIZES = {"S", "M", "L", "XL"}
 STALE_DAYS = 30
@@ -87,15 +95,16 @@ def collect(vault, today):
                 if not fn.endswith(".md"):
                     continue
                 path = os.path.join(dirpath, fn)
+                rel = os.path.relpath(path, vault).replace(os.sep, "/")[:-3]
                 try:
-                    text = open(path, encoding="utf-8").read()
-                except Exception as e:
-                    warnings.append(f"unreadable {path}: {e}")
+                    with open(path, encoding="utf-8-sig") as fh:  # -sig drops a BOM, as the browser does
+                        text = fh.read()
+                except Exception:
+                    warnings.append(f"{rel}.md: unreadable, skipped")
                     continue
                 fm, body = parse_frontmatter(text)
                 if not fm or fm.get("type") != "project":
                     continue
-                rel = os.path.relpath(path, vault).replace(os.sep, "/")[:-3]
                 name = str(fm.get("name") or "") or title_of(body, re.sub(r"\s+MOC$", "", fn[:-3]))
                 status = str(fm.get("status", "")).lower()
                 if status == "complete":
@@ -110,7 +119,7 @@ def collect(vault, today):
                     continue
                 try:
                     progress = int(float(fm.get("progress", 100 if lane == "landed" else 0)))
-                except ValueError:
+                except Exception:  # ValueError, TypeError (an empty `progress:`), OverflowError (inf)
                     warnings.append(f"{rel}: progress not a number; using 0")
                     progress = 0
                 progress = max(0, min(100, progress))
@@ -124,9 +133,12 @@ def collect(vault, today):
                 if lane == "landed":
                     updated = str(fm.get("completed") or updated)
                 stale = 0
-                if lane not in ("landed", "parked") and re.match(r"^\d{4}-\d{2}-\d{2}$", updated):
-                    d = (today - datetime.date.fromisoformat(updated)).days
-                    stale = d if d > STALE_DAYS else 0
+                if lane not in ("landed", "parked") and re.match(r"^[0-9]{4}-[0-9]{2}-[0-9]{2}$", updated):
+                    try:
+                        d = (today - datetime.date.fromisoformat(updated)).days
+                        stale = d if d > STALE_DAYS else 0
+                    except ValueError:
+                        warnings.append(f"{rel}: updated '{updated}' is not a real date")
                 kind = str(fm.get("kind") or "").lower()
                 if kind not in KINDS:
                     warnings.append(f"{rel}: kind '{kind}' missing or invalid (software|making|hardware|career|athletics)")
@@ -146,8 +158,8 @@ def collect(vault, today):
                     "area": str(fm.get("area") or ""), "kind": kind, "size": size, "note": rel,
                     "link": "obsidian://open?vault=" + VAULT_NAME + "&file=" + quote(rel),
                 })
-    projects.sort(key=lambda p: (["ready", "waiting", "blocked", "parked", "landed"].index(p["lane"]), -p["progress"], p["name"]))
-    return projects, warnings
+    projects.sort(key=lambda p: (LANES.index(p["lane"]), -p["progress"], p["name"], p["note"]))
+    return projects, sorted(warnings)
 
 
 def quote(s):
@@ -155,29 +167,42 @@ def quote(s):
     return q(s, safe="")
 
 
+def script_json(obj):
+    """JSON that is safe inside a <script> block (a note containing </script> cannot end it)."""
+    return json.dumps(obj, ensure_ascii=False).replace("</", "<\\/")
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--vault")
     ap.add_argument("--out")
     ap.add_argument("--check", action="store_true")
+    ap.add_argument("--mirror", action="store_true", help="snapshot-only page for the artifact mirror")
+    ap.add_argument("--dump", help="write the parsed projects and warnings as JSON to this file")
+    ap.add_argument("--today", help="YYYY-MM-DD, for tests")
     a = ap.parse_args()
     vault = find_vault(a.vault)
-    today = datetime.date.today()
+    today = datetime.date.fromisoformat(a.today) if a.today else datetime.date.today()
     projects, warnings = collect(vault, today)
     for w in warnings:
         print("warning:", w)
-    counts = {l: sum(p["lane"] == l for p in projects) for l in ("ready", "waiting", "blocked", "parked", "landed")}
+    counts = {l: sum(p["lane"] == l for p in projects) for l in LANES}
     floors = sum(int(p["progress"] / 10 + 0.5) for p in projects)  # same rounding as the page (Math.round)
-    print(f"{len(projects)} projects: {counts}; {floors} floors built, city level {1 + floors // 30}")
+    print(f"{len(projects)} projects: {counts}; {floors} floors built, city level {1 + floors // 30}; {len(warnings)} warnings")
+    if a.dump:
+        with open(a.dump, "w", encoding="utf-8") as f:
+            json.dump({"projects": projects, "warnings": warnings}, f, ensure_ascii=False, indent=1)
     if a.check:
         return
     tpl = open(TEMPLATE, encoding="utf-8").read()
     three = open(THREE, encoding="utf-8").read()
-    data = "const PROJECTS=" + json.dumps(projects, ensure_ascii=False) + ";"
-    html = (tpl.replace("/*THREE*/", three, 1).replace("/*DATA*/", data, 1)
-            .replace("{{BUILD_DATE}}", today.isoformat()).replace("{{COUNT}}", str(len(projects))))
+    parser = open(PARSER, encoding="utf-8").read()
+    snapshot = {"built": today.isoformat(), "projects": projects, "warnings": warnings}
+    build = {"live": not a.mirror, "vault": VAULT_NAME}
+    data = "const SNAPSHOT=" + script_json(snapshot) + ";\nconst BUILD=" + script_json(build) + ";"
+    html = tpl.replace("/*THREE*/", three, 1).replace("/*DATA*/", data, 1).replace("/*PARSER*/", parser, 1)
     out = a.out or os.path.join(vault, "00 Home", "Mission Control.html")
-    os.makedirs(os.path.dirname(out), exist_ok=True)
+    os.makedirs(os.path.dirname(os.path.abspath(out)), exist_ok=True)
     with open(out, "w", encoding="utf-8", newline="\n") as f:
         f.write(html)
     print("wrote", out, f"({os.path.getsize(out) // 1024} KB)")
