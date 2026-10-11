@@ -239,5 +239,5 @@ function frame(now){const dt=Math.min(.05,(now-last)/1000||0);last=now;const t=n
   const r=el.getBoundingClientRect();labels.forEach(L=>{v.copy(L.b.grp.position);v.y=L.b.top+1.2;v.project(camera);const on=selected===L.b.p.id||hoverId===L.b.p.id;L.el.classList.toggle("on",on);L.el.textContent=on?L.b.p.name+" · "+L.b.p.progress+"%":L.b.p.code;const vis=v.z<1&&Math.abs(v.x)<1.1&&Math.abs(v.y)<1.1;L.el.style.display=vis?"block":"none";if(vis){L.el.style.left=((v.x+1)/2*r.width)+"px";L.el.style.top=((1-v.y)/2*r.height)+"px"}});
   requestAnimationFrame(frame)}
 requestAnimationFrame(frame);
-select("edge");
+select((PROJECTS.find(p=>p.lane==="ready")||PROJECTS[0]).id);
 </script>

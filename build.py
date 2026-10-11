@@ -113,7 +113,12 @@ def collect(vault, today):
                 if lane == "landed":
                     progress = 100
                 code = str(fm.get("code") or "").upper() or slug(name)[:3].upper()
-                updated = str(fm.get("updated") or fm.get("completed") or fm.get("created") or "")
+                # `updated` if the note has it, else the note file's last-modified date (a fair proxy for activity)
+                updated = str(fm.get("updated") or "")
+                if not updated:
+                    updated = datetime.date.fromtimestamp(os.path.getmtime(path)).isoformat()
+                if lane == "landed":
+                    updated = str(fm.get("completed") or updated)
                 stale = 0
                 if lane != "landed" and re.match(r"^\d{4}-\d{2}-\d{2}$", updated):
                     d = (today - datetime.date.fromisoformat(updated)).days
