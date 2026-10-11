@@ -20,7 +20,9 @@ THREE = os.path.join(HERE, "vendor", "three.min.js")
 VAULT_NAME = "robin-personal"
 CANDIDATES = [os.environ.get("MC_VAULT", ""), r"E:\ObsidianVaults\robin-personal", r"D:\ObsidianVaults\robin-personal",
               os.path.expanduser("~/mnt/robin-personal")]
-LANES = {"ready", "waiting", "blocked", "landed"}
+LANES = {"ready", "waiting", "blocked", "parked", "landed"}
+KINDS = {"software", "making", "hardware", "career", "athletics"}
+SIZES = {"S", "M", "L", "XL"}
 STALE_DAYS = 30
 
 
@@ -101,8 +103,10 @@ def collect(vault, today):
                 lane = str(fm.get("lane", "")).lower() or ("landed" if status == "completed" else "")
                 if status == "completed":
                     lane = "landed"
+                elif status == "parked":
+                    lane = "parked"
                 if lane not in LANES:
-                    warnings.append(f"{rel}: lane '{lane}' missing or invalid (ready|waiting|blocked|landed); skipped")
+                    warnings.append(f"{rel}: lane '{lane}' missing or invalid (ready|waiting|blocked|parked|landed); skipped")
                     continue
                 try:
                     progress = int(float(fm.get("progress", 100 if lane == "landed" else 0)))
@@ -120,9 +124,16 @@ def collect(vault, today):
                 if lane == "landed":
                     updated = str(fm.get("completed") or updated)
                 stale = 0
-                if lane != "landed" and re.match(r"^\d{4}-\d{2}-\d{2}$", updated):
+                if lane not in ("landed", "parked") and re.match(r"^\d{4}-\d{2}-\d{2}$", updated):
                     d = (today - datetime.date.fromisoformat(updated)).days
                     stale = d if d > STALE_DAYS else 0
+                kind = str(fm.get("kind") or "").lower()
+                if kind not in KINDS:
+                    warnings.append(f"{rel}: kind '{kind}' missing or invalid (software|making|hardware|career|athletics)")
+                size = str(fm.get("size") or "").upper()
+                if size not in SIZES:
+                    warnings.append(f"{rel}: size '{size}' missing or invalid (S|M|L|XL); using M")
+                    size = "M"
                 for k in ("northstar", "next"):
                     if lane != "landed" and not fm.get(k):
                         warnings.append(f"{rel}: '{k}' is empty")
@@ -132,10 +143,10 @@ def collect(vault, today):
                     "north": str(fm.get("northstar") or ""), "next": str(fm.get("next") or ""),
                     "wait": str(fm.get("waiting_on") or ""), "updated": updated,
                     "completed": str(fm.get("completed") or ""), "stale": stale,
-                    "area": str(fm.get("area") or ""), "note": rel,
+                    "area": str(fm.get("area") or ""), "kind": kind, "size": size, "note": rel,
                     "link": "obsidian://open?vault=" + VAULT_NAME + "&file=" + quote(rel),
                 })
-    projects.sort(key=lambda p: (["ready", "waiting", "blocked", "landed"].index(p["lane"]), -p["progress"], p["name"]))
+    projects.sort(key=lambda p: (["ready", "waiting", "blocked", "parked", "landed"].index(p["lane"]), -p["progress"], p["name"]))
     return projects, warnings
 
 
@@ -155,7 +166,7 @@ def main():
     projects, warnings = collect(vault, today)
     for w in warnings:
         print("warning:", w)
-    counts = {l: sum(p["lane"] == l for p in projects) for l in ("ready", "waiting", "blocked", "landed")}
+    counts = {l: sum(p["lane"] == l for p in projects) for l in ("ready", "waiting", "blocked", "parked", "landed")}
     floors = sum(int(p["progress"] / 10 + 0.5) for p in projects)  # same rounding as the page (Math.round)
     print(f"{len(projects)} projects: {counts}; {floors} floors built, city level {1 + floors // 30}")
     if a.check:

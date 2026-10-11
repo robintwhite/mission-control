@@ -24,7 +24,9 @@ code: EDG                 # 3-letter call sign shown on the building
 name: "Edge AI Home Lab"  # optional short display name; the note title is used when absent
 northstar: "One line on what the project is building."
 progress: 60              # 0 to 100. One floor per 10%.
-lane: ready               # ready | waiting | blocked   (landed is derived from status: completed)
+lane: ready               # ready | waiting | blocked | parked   (landed from status: completed; status: parked also gives parked)
+kind: hardware            # software | making | hardware | career | athletics. Sets the building shape (v0.2)
+size: XL                  # S | M | L | XL. Sets the building height (v0.2): 6, 10, 16, 24 floors
 next: "The next concrete step."
 waiting_on: ""            # what Robin has to do or what is blocking; empty when nothing
 ```
@@ -33,7 +35,8 @@ Also used if present: `status`, `completed`, `updated`, `created`, `project` (sl
 
 Rules the build applies:
 - `status: completed` (or `complete`) forces `lane: landed` and `progress: 100`.
-- A project whose `updated` date is more than 30 days old gets a STALE marker.
+- A project whose `updated` date is more than 30 days old gets a STALE marker (not parked or landed ones).
+- `kind` and `size` are passed to the page; a missing or invalid one is a warning (size falls back to M). The page does not draw them yet (v0.2).
 - A project with no valid `lane` is skipped, with a warning.
 
 ## Running it

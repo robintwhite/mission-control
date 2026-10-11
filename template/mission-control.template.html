@@ -16,7 +16,7 @@ header h1{font-family:var(--title);font-weight:400;font-size:40px;margin:0;line-
 header .sub{font-family:var(--mono);font-size:12px;color:var(--dim);letter-spacing:.15em}
 .counts{margin-left:auto;display:flex;gap:18px;font-family:var(--mono);font-size:11px;letter-spacing:.1em;color:var(--dim)}
 .counts b{display:block;font-family:var(--display);font-size:24px;font-weight:700;line-height:1}
-.c-ready b{color:var(--cyan)}.c-waiting b{color:var(--orange)}.c-blocked b{color:var(--red)}.c-landed b{color:var(--green)}
+.c-ready b{color:var(--cyan)}.c-waiting b{color:var(--orange)}.c-blocked b{color:var(--red)}.c-landed b{color:var(--green)}.c-parked b{color:#7f8fb3}
 .city{position:relative;border:1px solid var(--line);background:var(--bg2);height:560px;overflow:hidden;box-shadow:0 0 40px rgba(155,92,255,.15) inset}
 .city canvas{position:absolute;inset:0;width:100%;height:100%;display:block}
 .city .hint{position:absolute;bottom:10px;left:14px;font-family:var(--mono);font-size:11px;color:var(--dim);letter-spacing:.15em;z-index:3}
@@ -48,7 +48,7 @@ header .sub{font-family:var(--mono);font-size:12px;color:var(--dim);letter-spaci
 .detail .kv dd{margin:0;min-width:0}
 .detail a{color:var(--cyan)}
 .flag{display:inline-block;font-family:var(--mono);font-size:11px;letter-spacing:.15em;padding:3px 8px;border:1px solid;width:max-content}
-.f-ready{color:var(--cyan);border-color:var(--cyan)}.f-waiting{color:var(--orange);border-color:var(--orange)}.f-blocked{color:var(--red);border-color:var(--red)}.f-landed{color:var(--green);border-color:var(--green)}
+.f-ready{color:var(--cyan);border-color:var(--cyan)}.f-waiting{color:var(--orange);border-color:var(--orange)}.f-blocked{color:var(--red);border-color:var(--red)}.f-landed{color:var(--green);border-color:var(--green)}.f-parked{color:#7f8fb3;border-color:#7f8fb3}
 .floors{display:flex;gap:3px;align-items:flex-end;height:44px}
 .floors i{flex:1;background:#0a0514;border:1px solid var(--line);height:100%}
 .floors i.on{background:linear-gradient(180deg,var(--cyan),var(--pink));border-color:transparent;box-shadow:0 0 8px rgba(255,60,172,.5)}
@@ -91,6 +91,7 @@ footer{font-family:var(--mono);font-size:11px;color:var(--dim);letter-spacing:.0
       <div style="color:var(--cyan)">■ INNER RING · READY TO FLY</div>
       <div style="color:var(--orange)">■ OUTER RING · WAITING ON ME</div>
       <div style="color:var(--red)">■ FAR CORNERS · BLOCKED</div>
+      <div style="color:#7f8fb3">■ OUTER RING · PARKED</div>
       <div style="color:var(--dim)">▫ GREY LOTS · CITY INFILL (UNLOCKED)</div>
     </div>
     <div class="hint">EVERY LIT BUILDING WITH A LABEL IS A PROJECT · LIT FLOORS = DONE · SCAFFOLD = LEFT · DRAG · SCROLL · CLICK · SPACE = SPIN</div>
@@ -114,10 +115,10 @@ footer{font-family:var(--mono);font-size:11px;color:var(--dim);letter-spacing:.0
 /*DATA*/
 </script>
 <script>
-const C={ready:"#2cf4ff",waiting:"#ffb347",blocked:"#ff4d6d",landed:"#5dffb0"};
-const ZONE={ready:"INNER RING",waiting:"OUTER RING",blocked:"FAR CORNER",landed:"DOWNTOWN CORE"};
-const LANE={ready:"READY TO FLY",waiting:"WAITING ON ME",blocked:"BLOCKED",landed:"LANDED"};
-const order=["ready","waiting","blocked","landed"];
+const C={ready:"#2cf4ff",waiting:"#ffb347",blocked:"#ff4d6d",parked:"#7f8fb3",landed:"#5dffb0"};
+const ZONE={ready:"INNER RING",waiting:"OUTER RING",blocked:"FAR CORNER",parked:"OUTER RING",landed:"DOWNTOWN CORE"};
+const LANE={ready:"READY TO FLY",waiting:"WAITING ON ME",blocked:"BLOCKED",parked:"PARKED",landed:"LANDED"};
+const order=["ready","waiting","blocked","parked","landed"].filter(l=>l!=="parked"||PROJECTS.some(p=>p.lane==="parked"));
 const byLane=l=>PROJECTS.filter(p=>p.lane===l).sort((a,b)=>b.progress-a.progress);
 const floorsOf=p=>Math.round(p.progress/10);
 document.getElementById("counts").innerHTML=order.map(l=>`<div class="c-${l}"><b>${byLane(l).length}</b>${LANE[l]}</div>`).join("");
@@ -174,6 +175,7 @@ take(lots.filter(l=>l.ring===0),byLane("landed"));
 take(lots.filter(l=>l.ring===1),byLane("ready"));
 take(lots.filter(l=>l.ring===2&&l.corner),byLane("blocked"));
 take(lots.filter(l=>l.ring===2&&!l.corner),byLane("waiting"));
+take(lots.filter(l=>l.ring===2&&!l.corner),byLane("parked"));
 // infill by level
 const infill={1:Math.min(.95,Math.max(0,(LEVEL-2)*.32)),2:Math.min(.8,Math.max(0,(LEVEL-4)*.25))};
 const parks=LEVEL>=3?2:0;let parksLeft=parks;
