@@ -25,6 +25,13 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 TEMPLATE = os.path.join(HERE, "template", "mission-control.template.html")
 PARSER = os.path.join(HERE, "template", "vault-parser.js")
 THREE = os.path.join(HERE, "vendor", "three.min.js")
+FONTS = [  # (family, weight, file in vendor/fonts). Latin subsets from @fontsource, SIL OFL (vendor/fonts/LICENSES.txt)
+    ("Monoton", 400, "monoton-latin-400-normal.woff2"),
+    ("Rajdhani", 500, "rajdhani-latin-500-normal.woff2"),
+    ("Rajdhani", 600, "rajdhani-latin-600-normal.woff2"),
+    ("Rajdhani", 700, "rajdhani-latin-700-normal.woff2"),
+    ("Share Tech Mono", 400, "share-tech-mono-latin-400-normal.woff2"),
+]
 VAULT_NAME = "robin-personal"
 CANDIDATES = [os.environ.get("MC_VAULT", ""), r"E:\ObsidianVaults\robin-personal", r"D:\ObsidianVaults\robin-personal",
               os.path.expanduser("~/mnt/robin-personal")]
@@ -183,6 +190,18 @@ def quote(s):
     return q(s, safe="")
 
 
+def font_css():
+    """@font-face rules with the fonts inlined, so the page needs no network."""
+    import base64
+    out = []
+    for family, weight, fn in FONTS:
+        with open(os.path.join(HERE, "vendor", "fonts", fn), "rb") as f:
+            b64 = base64.b64encode(f.read()).decode("ascii")
+        out.append(f"@font-face{{font-family:'{family}';font-style:normal;font-weight:{weight};font-display:swap;"
+                   f"src:url(data:font/woff2;base64,{b64}) format('woff2')}}")
+    return "\n".join(out)
+
+
 def script_json(obj):
     """JSON that is safe inside a <script> block (a note containing </script> cannot end it)."""
     return json.dumps(obj, ensure_ascii=False).replace("</", "<\\/")
@@ -217,7 +236,7 @@ def main():
     snapshot = {"built": today.isoformat(), "projects": projects, "warnings": warnings}
     build = {"live": not a.mirror, "vault": VAULT_NAME}
     data = "const SNAPSHOT=" + script_json(snapshot) + ";\nconst BUILD=" + script_json(build) + ";"
-    html = tpl.replace("/*THREE*/", three, 1).replace("/*DATA*/", data, 1).replace("/*PARSER*/", parser, 1)
+    html = tpl.replace("/*FONTS*/", font_css(), 1).replace("/*THREE*/", three, 1).replace("/*DATA*/", data, 1).replace("/*PARSER*/", parser, 1)
     out = a.out or os.path.join(vault, "00 Home", "Mission Control.html")
     os.makedirs(os.path.dirname(os.path.abspath(out)), exist_ok=True)
     with open(out, "w", encoding="utf-8", newline="\n") as f:

@@ -1,5 +1,5 @@
 <title>Mission Control</title>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Monoton&family=Rajdhani:wght@500;600;700&family=Share+Tech+Mono&display=swap">
+<style>/*FONTS*/</style>
 <style>
 /* Layout: a simulated neon city on a 5x5 block grid that grows outward from a downtown core. Landed projects are the core, ready ones the inner ring, waiting the outer ring, blocked the far corners. Filler buildings, parks, streetlights and a monorail unlock as the city levels up. Detail bay and cards below. Single committed look. */
 :root{
@@ -25,6 +25,7 @@ header .sub{font-family:var(--mono);font-size:12px;color:var(--dim);letter-spaci
 .city .ctl button[aria-pressed="false"]{color:var(--dim)}
 .city .ctl button:focus-visible{outline:1px solid var(--cyan)}
 .city .hint{right:200px}
+.fps{position:absolute;left:14px;bottom:30px;z-index:4;font-family:var(--mono);font-size:11px;letter-spacing:.12em;color:var(--green);background:rgba(11,6,24,.8);border:1px solid var(--line);padding:4px 8px}
 .leaders{position:absolute;inset:0;width:100%;height:100%;pointer-events:none;z-index:3;overflow:visible}
 .leaders line{stroke:#d9ccf5;stroke-opacity:.6;stroke-width:1}
 .toast{position:absolute;left:50%;top:18px;transform:translate(-50%,-8px);z-index:5;pointer-events:none;opacity:0;transition:opacity .4s,transform .4s;text-align:center;background:rgba(11,6,24,.88);border:1px solid var(--green);box-shadow:0 0 24px rgba(93,255,176,.35);padding:10px 22px;max-width:calc(100% - 40px)}
@@ -139,6 +140,7 @@ footer{font-family:var(--mono);font-size:11px;color:var(--dim);letter-spacing:.0
       <div style="color:var(--red)">■ FAR CORNERS · BLOCKED</div>
       <div style="color:#7f8fb3">■ OUTER RING · PARKED</div>
       <div style="color:var(--dim)">▫ GREY LOTS · CITY INFILL (UNLOCKED)</div>
+      <div style="color:var(--dim)">◆ SHAPE = KIND · TARP = PARKED · DIM, THEN RUST = STALE</div>
     </div>
     <svg class="leaders" id="leaders" aria-hidden="true"></svg>
     <div class="toast" id="toast" aria-live="polite"></div>
@@ -172,7 +174,8 @@ footer{font-family:var(--mono);font-size:11px;color:var(--dim);letter-spacing:.0
 const C={ready:"#2cf4ff",waiting:"#ffb347",blocked:"#ff4d6d",parked:"#7f8fb3",landed:"#5dffb0"};
 const ZONE={ready:"INNER RING",waiting:"OUTER RING",blocked:"FAR CORNER",parked:"OUTER RING",landed:"DOWNTOWN CORE"};
 const LANE={ready:"READY TO FLY",waiting:"WAITING ON ME",blocked:"BLOCKED",parked:"PARKED",landed:"LANDED"};
-const UNLOCKS=[[1,"Roads and the downtown core"],[2,"Streetlights downtown and on the inner ring"],[3,"Inner-ring infill begins, first parks"],[4,"Monorail loop around the core"],[5,"Outer-ring infill, holo billboards"],[6,"Downtown skyline towers"],[7,"Streetlights reach the far corners"],[8,"Second monorail line"]];
+const UNLOCKS=[[1,"Roads and the downtown core"],[2,"Streetlights downtown and on the inner ring"],[3,"Inner-ring infill begins, first parks"],[4,"Monorail loop over the ring road"],[5,"Outer-ring infill, holo billboards on the roofs"],[6,"Skyline towers ring the city"],[7,"Streetlights reach the far corners"],[8,"Second monorail on the outer road"],[9,"Flying traffic"],[10,"Searchlights sweep the sky"]];
+const KIND={software:"SOFTWARE",making:"MAKING",hardware:"HARDWARE",career:"CAREER",athletics:"ATHLETICS"};
 const $=id=>document.getElementById(id);
 const esc=s=>String(s).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
 const plural=(n,w)=>`${n} ${w}${n===1?"":"S"}`;
@@ -203,7 +206,7 @@ function select(id,focus){const p=PROJECTS.find(x=>x.id===id);
   if(!p){selected=null;$("detail").innerHTML=`<div class="eyebrow">NO BUILDINGS</div><h2>No project notes found</h2><div class="north">Check the warnings, or that the connected folder is the vault.</div>`;return}
   selected=id;const n=p.lit,N=p.floors,left=N-n;
   document.querySelectorAll(".card").forEach(c=>c.classList.toggle("sel",c.dataset.id===id));
-  $("detail").innerHTML=`<div class="eyebrow">BUILDING ${esc(p.code)} · SIZE ${esc(p.size)} · ${ZONE[p.lane]}</div><h2>${esc(p.name)}</h2><span class="flag f-${p.lane}">${LANE[p.lane]}</span><div class="north">${esc(p.north)}</div>
+  $("detail").innerHTML=`<div class="eyebrow">BUILDING ${esc(p.code)} · ${KIND[p.kind]||"NO KIND"} · SIZE ${esc(p.size)} · ${ZONE[p.lane]}</div><h2>${esc(p.name)}</h2><span class="flag f-${p.lane}">${LANE[p.lane]}</span><div class="north">${esc(p.north)}</div>
     <div class="floors">${Array.from({length:N},(_,i)=>`<i class="${i<n?"on":""}"></i>`).join("")}</div>
     <div class="meterline"><span>${n} OF ${N} FLOORS LIT${p.lane!=="landed"?` · ${left} MORE = +${left} XP · LANDING +${N} XP`:` · LANDED +${N} XP`}</span><b>${p.progress}%</b></div>
     <dl class="kv"><dt>NEXT</dt><dd>${esc(p.next||"Topped out "+(p.completed||""))}</dd>${p.wait?`<dt>WAITING</dt><dd style="color:var(--orange)">${esc(p.wait)}</dd>`:""}<dt>UPDATED</dt><dd style="font-family:var(--mono)">${esc(p.updated)}${p.stale?` · <span class="stale">${p.stale} DAYS, STALE</span>`:""}</dd><dt>NOTE</dt><dd><a href="${esc(p.link)}">Open in Obsidian</a></dd></dl>`;
@@ -225,50 +228,128 @@ const ground=new THREE.Mesh(new THREE.PlaneGeometry(500,500),new THREE.MeshBasic
 const grid=new THREE.GridHelper(400,100,0xff3cac,0x2cf4ff);grid.material.opacity=.18;grid.material.transparent=true;scene.add(grid);
 
 // FLOOR: one project floor. Heights come from size: S 6, M 10, L 16, XL 24 floors (XL = 28.8 units, the camera still sees over it)
-const LOT=4.6,ROAD=3.2,BLOCKS=5,PITCH=2*LOT+ROAD,FLOOR=1.2,INFILL_FLOOR=1.36,RAIL_H=9.4;
-let city=null,buildings=[],labels=[],pickables=[],cars=[],trains=[],queue=[];
+const LOT=4.6,ROAD=3.2,BLOCKS=5,PITCH=2*LOT+ROAD,FLOOR=1.2,INFILL_FLOOR=1.36;
+let city=null,buildings=[],labels=[],pickables=[],cars=[],trains=[],queue=[],unlockGroups=[],signs=[],blinkers=[],fliers=[],searchlights=[];
 function disposeCity(){if(!city)return;scene.remove(city);
   city.traverse(o=>{if(o.geometry)o.geometry.dispose();const ms=Array.isArray(o.material)?o.material:o.material?[o.material]:[];ms.forEach(m=>{if(m.map)m.map.dispose();if(m.emissiveMap&&m.emissiveMap!==m.map)m.emissiveMap.dispose();m.dispose()})});
-  labels.forEach(L=>L.el.remove());city=null;buildings=[];labels=[];pickables=[];cars=[];trains=[];queue=[]}
-function windowTex(hex,lit,seed){const r=mulberry(seed);const c=document.createElement("canvas");c.width=64;c.height=64;const g=c.getContext("2d");g.fillStyle="#120826";g.fillRect(0,0,64,64);g.fillStyle=hex;for(let y=0;y<4;y++)for(let x=0;x<4;x++){if(r()<lit){g.globalAlpha=.5+r()*.5;g.fillRect(6+x*15,6+y*15,8,9)}}const t=new THREE.CanvasTexture(c);t.wrapS=t.wrapT=THREE.RepeatWrapping;return t}
+  labels.forEach(L=>L.el.remove());city=null;buildings=[];labels=[];pickables=[];cars=[];trains=[];queue=[];unlockGroups=[];signs=[];blinkers=[];fliers=[];searchlights=[]}
+// window patterns: grid (default), glass (thin vertical strips), band (one wide strip per floor)
+function windowTex(hex,lit,seed,style){const r=mulberry(seed);const c=document.createElement("canvas");c.width=64;c.height=64;const g=c.getContext("2d");g.fillStyle="#120826";g.fillRect(0,0,64,64);g.fillStyle=hex;
+  if(style==="glass"){for(let x=0;x<6;x++)if(r()<lit+.15){g.globalAlpha=.45+r()*.55;g.fillRect(4+x*10,6,5,52)}}
+  else if(style==="band"){for(let x=0;x<3;x++)if(r()<lit+.2){g.globalAlpha=.5+r()*.5;g.fillRect(4+x*20,22,17,20)}}
+  else for(let y=0;y<4;y++)for(let x=0;x<4;x++){if(r()<lit){g.globalAlpha=.5+r()*.5;g.fillRect(6+x*15,6+y*15,8,9)}}
+  const t=new THREE.CanvasTexture(c);t.wrapS=t.wrapT=THREE.RepeatWrapping;return t}
+// a lit sign with a word on it; redrawn once the page fonts have loaded
+function signTex(text,hex){const c=document.createElement("canvas");c.width=256;c.height=96;const t=new THREE.CanvasTexture(c);
+  const draw=()=>{const g=c.getContext("2d");g.clearRect(0,0,256,96);g.fillStyle="rgba(11,6,24,.72)";g.fillRect(0,0,256,96);g.strokeStyle=hex;g.lineWidth=5;g.strokeRect(4,4,248,88);
+    g.font="700 58px Rajdhani, 'Share Tech Mono', sans-serif";g.textAlign="center";g.textBaseline="middle";g.shadowColor=hex;g.shadowBlur=14;g.fillStyle=hex;g.fillText(text,128,52);t.needsUpdate=true};
+  draw();signs.push(draw);return t}
+if(document.fonts&&document.fonts.ready)document.fonts.ready.then(()=>signs.forEach(d=>d()));
+// a right-angled roof tooth (sawtooth roof), w wide, h high, d deep
+function toothGeo(w,h,d){const a=-w/2,b=w/2,z0=-d/2,z1=d/2;const v=[a,0,z0,b,0,z0,b,h,z0, a,0,z1,b,h,z1,b,0,z1, a,0,z0,b,h,z0,b,h,z1, a,0,z0,b,h,z1,a,0,z1, b,0,z0,b,0,z1,b,h,z1, b,0,z0,b,h,z1,b,h,z0, a,0,z0,a,0,z1,b,0,z1, a,0,z0,b,0,z1,b,0,z0];
+  const g=new THREE.BufferGeometry();g.setAttribute("position",new THREE.Float32BufferAttribute(v,3));g.computeVertexNormals();return g}
 
-// A project building: a stack of floors. Lit floors (done) are solid with windows; the rest are scaffold.
-// Each floor is its own object so "since your last visit" can light them one by one.
+// Shape by kind (v0.2 step 3). Each kind sets the floor height, how wide the footprint is, where it steps in, and the roof.
+// steps: [share of the floors, footprint scale from that floor up]
+const KIND_SHAPE={
+  software:{fh:1,wide:1,steps:[[.62,.82],[.86,.66]],win:"glass"},              // glass tower with setbacks
+  making:{fh:.8,wide:1.32,steps:[],win:"band"},                                 // low wide workshop, sawtooth roof, chimney
+  hardware:{fh:1,wide:1.12,steps:[[.8,.84]],win:"grid"},                       // industrial block, pipes, dish and antennas
+  career:{fh:1,wide:1.1,steps:[[.4,.86],[.65,.72],[.85,.58]],win:"grid"},      // stepped office, rooftop sign
+  athletics:{fh:.9,wide:1.12,steps:[],win:"band",round:true},                   // round arena tower with a dome
+};
+const RUST=new THREE.Color("#b4532a"),TARP=0x2a3552;
+// A project building: a stack of floors. Lit floors (done) are solid with windows; the rest are scaffold
+// (or a tarp, when parked). Each floor is its own object so new floors can light one by one.
 function makeBuilding(p,l,idx){
-  const lane=p.lane,col=new THREE.Color(C[lane]),N=p.floors,n=p.lit,topY=N*FLOOR;
-  const cc=(p.code+"   ").toUpperCase();const h=(cc.charCodeAt(0)+cc.charCodeAt(2))%5;const fw=2.6+h*.22,fd=2.6+((h*3)%5)*.18;
+  const lane=p.lane,N=p.floors,n=p.lit,S=KIND_SHAPE[p.kind]||KIND_SHAPE.software,FH=FLOOR*S.fh,topY=N*FH;
+  const stale=p.stale||0,dim=stale>0,rusty=stale>60;
+  const col=new THREE.Color(C[lane]);if(rusty)col.lerp(RUST,.6);
+  const rnd=mulberry(idx*7919+N*31+(p.code.charCodeAt(0)||0));
+  const cc=(p.code+"   ").toUpperCase();const h=(cc.charCodeAt(0)+cc.charCodeAt(2))%5;
+  const W=Math.min(LOT-.45,(2.6+h*.22)*S.wide),D=Math.min(LOT-.45,(2.6+((h*3)%5)*.18)*S.wide),R=Math.min(W,D)/2;
+  const scaleAt=f=>{let s=1;for(const[fr,sc]of S.steps)if(N>=6&&f>0&&f>=Math.ceil(N*fr))s=sc;return s};
   const grp=new THREE.Group();grp.position.set(l.x,0,l.z);
-  const tex=windowTex(C[lane],lane==="landed"?.85:.5,idx+7);
-  const litMat=new THREE.MeshStandardMaterial({map:tex,emissive:col,emissiveMap:tex,emissiveIntensity:1.1,color:0x1a0f33,roughness:.6});
-  const floorGeo=new THREE.BoxGeometry(fw,FLOOR*.94,fd),edgeGeo=new THREE.EdgesGeometry(floorGeo),edgeMat=new THREE.LineBasicMaterial({color:col});
-  const scafGeo=new THREE.EdgesGeometry(new THREE.BoxGeometry(fw+.3,FLOOR,fd+.3)),scafMat=new THREE.LineBasicMaterial({color:col,transparent:true,opacity:.38});
-  const floors=[];
-  for(let f=0;f<N;f++){const y=f*FLOOR+FLOOR/2;const g=new THREE.Group();g.position.y=y;g.add(new THREE.Mesh(floorGeo,litMat));g.add(new THREE.LineSegments(edgeGeo,edgeMat));grp.add(g);
-    const sc=new THREE.LineSegments(scafGeo,scafMat);sc.position.y=y;grp.add(sc);floors.push({g,sc})}
-  const slab=new THREE.Mesh(new THREE.BoxGeometry(fw,.14,fd),new THREE.MeshBasicMaterial({color:col,transparent:true,opacity:.5}));grp.add(slab);
-  const flash=new THREE.Mesh(new THREE.BoxGeometry(fw+.25,FLOOR,fd+.25),new THREE.MeshBasicMaterial({color:0xffffff,transparent:true,opacity:0,depthWrite:false,blending:THREE.AdditiveBlending}));flash.visible=false;grp.add(flash);
-  let crane=null;if(lane==="ready"&&n<N){crane=new THREE.Group();const H=topY+3;const mast=new THREE.Mesh(new THREE.BoxGeometry(.25,H,.25),new THREE.MeshBasicMaterial({color:0xffe14d}));mast.position.y=H/2;crane.add(mast);const jib=new THREE.Group();jib.position.y=H;const arm=new THREE.Mesh(new THREE.BoxGeometry(5.5,.18,.18),new THREE.MeshBasicMaterial({color:0xffe14d}));arm.position.x=1.6;jib.add(arm);const hook=new THREE.Mesh(new THREE.BoxGeometry(.12,2.2,.12),new THREE.MeshBasicMaterial({color:0xffe14d}));hook.position.set(3.6,-1.1,0);jib.add(hook);const load=new THREE.Mesh(new THREE.BoxGeometry(.7,.5,.7),new THREE.MeshBasicMaterial({color:col}));load.position.set(3.6,-2.4,0);jib.add(load);const lamp=new THREE.Mesh(new THREE.SphereGeometry(.18,8,8),new THREE.MeshBasicMaterial({color:0xff4d6d}));lamp.position.y=H+.3;crane.add(lamp);crane.add(jib);crane.jib=jib;crane.position.set(fw/2+.6,0,-fd/2-.6);grp.add(crane)}
-  let beacon=null,crown=null,burst=null,beam=null;
-  if(lane!=="ready"){beacon=new THREE.Mesh(new THREE.SphereGeometry(.28,10,10),new THREE.MeshBasicMaterial({color:col}));beacon.position.y=topY+.6;grp.add(beacon);
+  const tex=windowTex("#"+col.getHexString(),(lane==="landed"?.85:.5)*(dim?.6:1),idx+7,S.win);if(S.round)tex.repeat.set(3,1);
+  const litMat=new THREE.MeshStandardMaterial({map:tex,emissive:col,emissiveMap:tex,emissiveIntensity:dim?.5:1.1,color:rusty?0x2a160e:0x1a0f33,roughness:.6});
+  const edgeMat=new THREE.LineBasicMaterial({color:col,transparent:dim,opacity:dim?.6:1}),scafMat=new THREE.LineBasicMaterial({color:rusty?RUST:col,transparent:true,opacity:lane==="parked"?.25:.38});
+  const tarpMat=new THREE.MeshStandardMaterial({color:TARP,roughness:.95,transparent:true,opacity:.92});
+  const geos={},geo=s=>geos[s]||(geos[s]=(()=>{let fg,sg;
+    if(S.round){fg=new THREE.CylinderGeometry(R*s,R*s,FH*.94,14);sg=new THREE.CylinderGeometry(R*s+.18,R*s+.18,FH,14)}
+    else{fg=new THREE.BoxGeometry(W*s,FH*.94,D*s);sg=new THREE.BoxGeometry(W*s+.3,FH,D*s+.3)}
+    return{fg,eg:new THREE.EdgesGeometry(fg,20),sg:new THREE.EdgesGeometry(sg,20),tg:sg}})());
+  // floors with the same footprint form a segment: lit floors are one InstancedMesh (count = floors lit),
+  // their edges and the scaffold are one line set each (shown by draw range). A few draw calls per building.
+  const floors=[],segs=[];for(let f=0;f<N;f++){const s=scaleAt(f);floors.push({s});if(!segs.length||segs[segs.length-1].s!==s)segs.push({s,f0:f,len:0});segs[segs.length-1].len++}
+  const stack=(src,f0,len,topDown)=>{const a=src.attributes.position.array,out=new Float32Array(a.length*len);for(let i=0;i<len;i++){const y=(topDown?f0+len-1-i:f0+i)*FH+FH/2;for(let j=0;j<a.length;j+=3){const o=i*a.length+j;out[o]=a[j];out[o+1]=a[j+1]+y;out[o+2]=a[j+2]}}const g=new THREE.BufferGeometry();g.setAttribute("position",new THREE.BufferAttribute(out,3));return g};
+  const m4=new THREE.Matrix4();
+  segs.forEach(sg=>{const G=geo(sg.s);
+    sg.lit=new THREE.InstancedMesh(G.fg,litMat,sg.len);sg.lit.frustumCulled=false;for(let i=0;i<sg.len;i++)sg.lit.setMatrixAt(i,m4.makeTranslation(0,(sg.f0+i)*FH+FH/2,0));grp.add(sg.lit);
+    sg.edge=new THREE.LineSegments(stack(G.eg,sg.f0,sg.len),edgeMat);sg.ev=G.eg.attributes.position.count;grp.add(sg.edge);
+    sg.scaf=new THREE.LineSegments(stack(G.sg,sg.f0,sg.len),scafMat);sg.sv=G.sg.attributes.position.count;grp.add(sg.scaf);
+    if(lane==="parked"){sg.tarp=new THREE.InstancedMesh(G.tg,tarpMat,sg.len);sg.tarp.frustumCulled=false;for(let i=0;i<sg.len;i++)sg.tarp.setMatrixAt(i,m4.makeTranslation(0,(sg.f0+sg.len-1-i)*FH+FH/2,0));grp.add(sg.tarp)}});
+  const sTop=scaleAt(N-1);
+  const slab=new THREE.Mesh(S.round?new THREE.CylinderGeometry(R,R,.14,14):new THREE.BoxGeometry(W,.14,D),new THREE.MeshBasicMaterial({color:col,transparent:true,opacity:.5}));grp.add(slab);
+  const flash=new THREE.Mesh(S.round?new THREE.CylinderGeometry(R+.12,R+.12,FH,14):new THREE.BoxGeometry(W+.25,FH,D+.25),new THREE.MeshBasicMaterial({color:0xffffff,transparent:true,opacity:0,depthWrite:false,blending:THREE.AdditiveBlending}));flash.visible=false;grp.add(flash);
+  // the roof: solid once the building tops out, a wire outline in scaffold colour until then
+  const roof=new THREE.Group(),dark=new THREE.MeshStandardMaterial({color:0x2a1d4a,roughness:.7}),glow=new THREE.MeshBasicMaterial({color:col});
+  const add=(geom,mat,x,y,z)=>{const m=new THREE.Mesh(geom,mat);m.position.set(x,y,z);roof.add(m);return m};
+  const tw=W*sTop,td=D*sTop;let roofH=.8;
+  if(p.kind==="making"){const k=3,tw3=tw/k;for(let i=0;i<k;i++)add(toothGeo(tw3,1,td*.92),dark,-tw/2+tw3*(i+.5),0,0);
+    add(new THREE.CylinderGeometry(.18,.24,2.4,8),dark,tw/2-.4,1.2,td/2-.4);add(new THREE.TorusGeometry(.2,.05,6,12),glow,tw/2-.4,2.42,td/2-.4).rotation.x=Math.PI/2;roofH=2.5}
+  else if(p.kind==="hardware"){add(new THREE.BoxGeometry(.08,2.8,.08),glow,-tw/4,1.4,-td/4);add(new THREE.BoxGeometry(.08,1.8,.08),dark,tw/4,.9,-td/4);
+    const dish=add(new THREE.SphereGeometry(.75,14,6,0,Math.PI*2,0,Math.PI/2.4),new THREE.MeshStandardMaterial({color:0x6a5a99,roughness:.5,side:THREE.DoubleSide}),tw/5,.6,td/5);dish.rotation.set(-2.3,rnd()*6,0);
+    for(const sx of[-1,1])add(new THREE.CylinderGeometry(.12,.12,topY,6),new THREE.MeshStandardMaterial({color:0x5a3a9a,roughness:.5}),sx*(W/2+.12)*.7,-topY/2,D/2+.1);roofH=2.8}
+  else if(p.kind==="career"){const sign=add(new THREE.PlaneGeometry(Math.max(1.4,tw*.9),.8),new THREE.MeshBasicMaterial({map:signTex(p.code,"#"+col.getHexString()),transparent:true,side:THREE.DoubleSide}),0,1.1,0);sign.rotation.y=rnd()*Math.PI;
+    for(const sx of[-1,1])add(new THREE.BoxGeometry(.06,.7,.06),dark,sx*Math.max(.6,tw*.38),.35,0);roofH=1.5}
+  else if(p.kind==="athletics"){add(new THREE.SphereGeometry(R*sTop,18,8,0,Math.PI*2,0,Math.PI/2),new THREE.MeshStandardMaterial({color:0x241446,emissive:col,emissiveIntensity:.18,roughness:.4,transparent:true,opacity:.92}),0,0,0);
+    add(new THREE.TorusGeometry(R*sTop,.07,6,28),glow,0,.02,0).rotation.x=Math.PI/2;roofH=R*sTop}
+  else{add(new THREE.BoxGeometry(tw*.42,.6,td*.42),dark,0,.3,0);add(new THREE.BoxGeometry(.07,2.4,.07),glow,0,1.8,0);roofH=3}
+  roof.position.y=topY;
+  const wire=new THREE.Group();wire.position.y=topY;roof.children.forEach(m=>{if(m.geometry.parameters&&m.geometry.parameters.height===topY)return;const e=new THREE.LineSegments(new THREE.EdgesGeometry(m.geometry,25),scafMat);e.position.copy(m.position);e.rotation.copy(m.rotation);wire.add(e)});
+  grp.add(roof);grp.add(wire);
+  let crane=null;if(lane==="ready"&&n<N){const cm=new THREE.MeshBasicMaterial({color:rusty?0x8a4b2a:0xffe14d});crane=new THREE.Group();const H=topY+roofH+2;const mast=new THREE.Mesh(new THREE.BoxGeometry(.25,H,.25),cm);mast.position.y=H/2;crane.add(mast);const jib=new THREE.Group();jib.position.y=H;const arm=new THREE.Mesh(new THREE.BoxGeometry(5.5,.18,.18),cm);arm.position.x=1.6;jib.add(arm);const hook=new THREE.Mesh(new THREE.BoxGeometry(.12,2.2,.12),cm);hook.position.set(3.6,-1.1,0);jib.add(hook);const load=new THREE.Mesh(new THREE.BoxGeometry(.7,.5,.7),new THREE.MeshBasicMaterial({color:col}));load.position.set(3.6,-2.4,0);jib.add(load);const lamp=new THREE.Mesh(new THREE.SphereGeometry(.18,8,8),new THREE.MeshBasicMaterial({color:0xff4d6d}));lamp.position.y=H+.3;crane.add(lamp);crane.add(jib);crane.jib=jib;crane.position.set(W/2+.6,0,-D/2-.6);grp.add(crane)}
+  const crestY=topY+roofH;let beacon=null,crown=null,burst=null,beam=null;
+  if(lane!=="ready"){beacon=new THREE.Mesh(new THREE.SphereGeometry(.28,10,10),new THREE.MeshBasicMaterial({color:col}));beacon.position.y=crestY+.4;grp.add(beacon);
     if(lane==="landed"){
       // the crown: spire, halo and beacon. The landing moment grows it and fires the burst and the beam
-      crown=new THREE.Group();crown.position.y=topY;
+      crown=new THREE.Group();crown.position.y=crestY;
       const spire=new THREE.Mesh(new THREE.BoxGeometry(.14,3.2,.14),new THREE.MeshBasicMaterial({color:col}));spire.position.y=1.6;crown.add(spire);
       const halo=new THREE.Mesh(new THREE.TorusGeometry(.55,.06,6,24),new THREE.MeshBasicMaterial({color:col}));halo.rotation.x=Math.PI/2;halo.position.y=1.1;crown.add(halo);
-      grp.add(crown);beacon.position.y=topY+3.4;
-      burst=new THREE.Mesh(new THREE.RingGeometry(.9,1.25,40),new THREE.MeshBasicMaterial({color:col,side:THREE.DoubleSide,transparent:true,opacity:0,depthWrite:false,blending:THREE.AdditiveBlending}));burst.rotation.x=-Math.PI/2;burst.position.y=topY+.2;burst.visible=false;grp.add(burst);
-      beam=new THREE.Mesh(new THREE.CylinderGeometry(.35,1.1,60,16,1,true),new THREE.MeshBasicMaterial({color:col,transparent:true,opacity:0,depthWrite:false,side:THREE.DoubleSide,blending:THREE.AdditiveBlending,fog:false}));beam.position.y=topY+30;beam.visible=false;grp.add(beam)}
-    if(lane==="blocked"){const tape=new THREE.LineSegments(new THREE.EdgesGeometry(new THREE.BoxGeometry(fw+1.2,.01,fd+1.2)),new THREE.LineDashedMaterial({color:col,dashSize:.4,gapSize:.3}));tape.computeLineDistances();tape.position.y=.05;grp.add(tape)}}
-  const hit=new THREE.Mesh(new THREE.BoxGeometry(fw+.6,topY+1,fd+.6),new THREE.MeshBasicMaterial({visible:false}));hit.position.y=(topY+1)/2;hit.userData.id=p.id;grp.add(hit);pickables.push(hit);
-  const ring=new THREE.Mesh(new THREE.RingGeometry(fw*.9,fw*.9+.35,32),new THREE.MeshBasicMaterial({color:0xff3cac,side:THREE.DoubleSide,transparent:true,opacity:0}));ring.rotation.x=-Math.PI/2;ring.position.y=.03;grp.add(ring);
-  const b={p,grp,crane,beacon,crown,burst,beam,ring,floors,slab,flash,N,shown:n,topY,top:topY+(crane?3:lane==="landed"?3.6:.9),flashAt:-1e9,landAt:-1e9};
+      grp.add(crown);beacon.position.y=crestY+3.4;
+      burst=new THREE.Mesh(new THREE.RingGeometry(.9,1.25,40),new THREE.MeshBasicMaterial({color:col,side:THREE.DoubleSide,transparent:true,opacity:0,depthWrite:false,blending:THREE.AdditiveBlending}));burst.rotation.x=-Math.PI/2;burst.position.y=crestY+.2;burst.visible=false;grp.add(burst);
+      beam=new THREE.Mesh(new THREE.CylinderGeometry(.35,1.1,60,16,1,true),new THREE.MeshBasicMaterial({color:col,transparent:true,opacity:0,depthWrite:false,side:THREE.DoubleSide,blending:THREE.AdditiveBlending,fog:false}));beam.position.y=crestY+30;beam.visible=false;grp.add(beam)}
+    if(lane==="blocked"){const tape=new THREE.LineSegments(new THREE.EdgesGeometry(new THREE.BoxGeometry(W+1.2,.01,D+1.2)),new THREE.LineDashedMaterial({color:col,dashSize:.4,gapSize:.3}));tape.computeLineDistances();tape.position.y=.05;grp.add(tape)}}
+  const hit=new THREE.Mesh(new THREE.BoxGeometry(W+.6,crestY+1,D+.6),new THREE.MeshBasicMaterial({visible:false}));hit.position.y=(crestY+1)/2;hit.userData.id=p.id;grp.add(hit);pickables.push(hit);
+  const ring=new THREE.Mesh(new THREE.RingGeometry(Math.max(W,D)*.75,Math.max(W,D)*.75+.35,32),new THREE.MeshBasicMaterial({color:0xff3cac,side:THREE.DoubleSide,transparent:true,opacity:0}));ring.rotation.x=-Math.PI/2;ring.position.y=.03;grp.add(ring);
+  const b={p,grp,crane,beacon,crown,burst,beam,ring,floors,segs,slab,flash,roof,wire,N,FH,shown:n,topY,top:crestY+(crane?2.2:lane==="landed"?3.6:.9),flashAt:-1e9,landAt:-1e9,stale};
   setShown(b,n);return b;
 }
-function setShown(b,k){b.shown=k;b.floors.forEach((f,i)=>{f.g.visible=i<k;f.sc.visible=i>=k});b.slab.visible=k<b.N;b.slab.position.y=k*FLOOR+.07}
+function setShown(b,k){b.shown=k;b.segs.forEach(sg=>{const n=Math.max(0,Math.min(sg.len,k-sg.f0)),r=sg.len-n;
+    sg.lit.count=n;sg.lit.visible=n>0;sg.edge.geometry.setDrawRange(0,n*sg.ev);sg.edge.visible=n>0;sg.scaf.geometry.setDrawRange(n*sg.sv,r*sg.sv);sg.scaf.visible=r>0;if(sg.tarp){sg.tarp.count=r;sg.tarp.visible=r>0}});b.slab.visible=k<b.N;b.slab.position.y=k*b.FH+.07;
+  b.slab.scale.set(b.floors[Math.min(k,b.N-1)].s,1,b.floors[Math.min(k,b.N-1)].s);b.roof.visible=k>=b.N;b.wire.visible=k<b.N}
 
+// a closed loop over the roads: a rounded square (superellipse) of half-size `half`, at height h
+function loopCurve(half,h){const pts=[];for(let i=0;i<64;i++){const a=i/64*Math.PI*2,c=Math.cos(a),s=Math.sin(a);pts.push(new THREE.Vector3(half*Math.sign(c)*Math.pow(Math.abs(c),1/6),h,half*Math.sign(s)*Math.pow(Math.abs(s),1/6)))}return new THREE.CatmullRomCurve3(pts,true)}
+function monorail(parent,half,h,hex,cars,speed){const curve=loopCurve(half,h);
+  parent.add(new THREE.Mesh(new THREE.TubeGeometry(curve,220,.12,5,true),new THREE.MeshBasicMaterial({color:hex})));
+  const I=instancer();for(let k=0;k<16;k++){const q=curve.getPointAt(k/16);I.add("pylon",()=>new THREE.BoxGeometry(.18,h,.18),new THREE.MeshBasicMaterial({color:0x5a3a9a}),q.x,h/2,q.z)}I.done(parent);
+  for(let c=0;c<cars;c++){const car=new THREE.Mesh(new THREE.BoxGeometry(1.6,.5,.6),new THREE.MeshBasicMaterial({color:hex}));parent.add(car);trains.push({m:car,curve,u0:c*.022,speed})}}
+
+// batching: many copies of one small mesh become one InstancedMesh, and lot outlines one line set per colour.
+// This keeps draw calls low for the laptop.
+function instancer(){const sets=new Map(),m4=new THREE.Matrix4(),q=new THREE.Quaternion(),e=new THREE.Euler(),v=new THREE.Vector3(),sc=new THREE.Vector3();
+  return{add(key,mk,mat,x,y,z,ry,sx,sy,sz){let s=sets.get(key);if(!s){s={geo:mk(),mat,list:[]};sets.set(key,s)}s.list.push([x,y,z,ry||0,sx||1,sy||1,sz||1])},
+    done(parent){sets.forEach(s=>{const im=new THREE.InstancedMesh(s.geo,s.mat,s.list.length);s.list.forEach((a,i)=>{q.setFromEuler(e.set(0,a[3],0));m4.compose(v.set(a[0],a[1],a[2]),q,sc.set(a[4],a[5],a[6]));im.setMatrixAt(i,m4)});parent.add(im)});sets.clear()}}}
+function outliner(){const sets=new Map();
+  return{add(hex,op,x,z,s){const k=hex+"|"+op;if(!sets.has(k))sets.set(k,[]);const p=sets.get(k),h=s/2,c=[[x-h,z-h],[x+h,z-h],[x+h,z+h],[x-h,z+h]];for(let i=0;i<4;i++){const a=c[i],b=c[(i+1)%4];p.push(a[0],.02,a[1],b[0],.02,b[1])}},
+    done(parent){sets.forEach((p,k)=>{const[hex,op]=k.split("|");const g=new THREE.BufferGeometry();g.setAttribute("position",new THREE.Float32BufferAttribute(p,3));parent.add(new THREE.LineSegments(g,new THREE.LineBasicMaterial({color:hex,transparent:true,opacity:+op})))})}}}
+const SIGN_WORDS=["HOTEL","BAR","RAMEN","24H","ARCADE","MOTEL","SYNTH","NOODLE","CLUB","NEON","DATA","SUSHI"];
 function buildCity(){
   disposeCity();city=new THREE.Group();scene.add(city);
-  const rnd=mulberry(20261011);
+  const rnd=mulberry(20261011),rnd2=mulberry(5150);
+  // things a level unlocks go in that level's group, so a level up can raise them
+  const ug=lv=>{if(!unlockGroups[lv]){const g=new THREE.Group();g.userData.level=lv;g.userData.growAt=-1e9;unlockGroups[lv]=g;city.add(g)}return unlockGroups[lv]};
   // city plan: 5x5 blocks, each 2x2 lots
   const lots=[];
   for(let bi=0;bi<BLOCKS;bi++)for(let bj=0;bj<BLOCKS;bj++)for(let li=0;li<2;li++)for(let lj=0;lj<2;lj++){const x=(bi-2)*PITCH+(li-.5)*LOT,z=(bj-2)*PITCH+(lj-.5)*LOT;lots.push({bi,bj,ring:Math.max(Math.abs(bi-2),Math.abs(bj-2)),corner:Math.abs(bi-2)===2&&Math.abs(bj-2)===2,x,z,d:Math.hypot(x,z),used:null})}
@@ -288,23 +369,50 @@ function buildCity(){
   const infill={1:Math.min(.95,Math.max(0,(LEVEL-2)*.32)),2:Math.min(.8,Math.max(0,(LEVEL-4)*.25))};
   let parksLeft=LEVEL>=3?2:0;
   lots.forEach(l=>{if(l.used||l.ring===0)return;const r=rnd();if(l.ring===1&&parksLeft>0&&r<.12){l.used="park";parksLeft--;return}if(r<(infill[l.ring]||0))l.used="fill";else if(l.ring===2&&r<(infill[2]||0)+.15)l.used="rubble";else l.used="zoned"});
-  function lotOutline(l,hex,op){const e=new THREE.LineSegments(new THREE.EdgesGeometry(new THREE.PlaneGeometry(LOT-.5,LOT-.5)),new THREE.LineBasicMaterial({color:hex,transparent:true,opacity:op}));e.rotation.x=-Math.PI/2;e.position.set(l.x,.02,l.z);city.add(e)}
+  const OL=outliner(),INS=instancer();const lotOutline=(l,hex,op)=>OL.add(hex,op,l.x,l.z,LOT-.5);
+  const roofs=[],fillEdges=[],fillMats={};
+  const fillMat=fl=>fillMats[fl]||(fillMats[fl]=(()=>{const tex=windowTex("#8c6bd8",.35,99+fl);tex.repeat.set(1,fl);return new THREE.MeshStandardMaterial({map:tex,emissive:0x6a4bb0,emissiveMap:tex,emissiveIntensity:.7,color:0x140a2a,roughness:.7})})());
   lots.forEach((l,idx)=>{
     if(l.used&&l.used.id){const p=l.used;lotOutline(l,C[p.lane],.5);const b=makeBuilding(p,l,idx);city.add(b.grp);buildings.push(b);
       const lbl=document.createElement("div");lbl.className="lbl";lbl.textContent=p.code;host.appendChild(lbl);labels.push({el:lbl,b,txt:p.code,on:false,w:0,h:0})}
-    else if(l.used==="fill"){const fl=l.ring===1?2+Math.floor(rnd()*5):1+Math.floor(rnd()*2);const fw=2+rnd()*1.4,fd=2+rnd()*1.4;const tex=windowTex("#8c6bd8",.35,idx+99);tex.repeat.set(1,fl);const m=new THREE.Mesh(new THREE.BoxGeometry(fw,fl*INFILL_FLOOR,fd),new THREE.MeshStandardMaterial({map:tex,emissive:0x6a4bb0,emissiveMap:tex,emissiveIntensity:.7,color:0x140a2a,roughness:.7}));m.position.set(l.x+(rnd()-.5)*.8,fl*INFILL_FLOOR/2,l.z+(rnd()-.5)*.8);city.add(m);const e=new THREE.LineSegments(new THREE.EdgesGeometry(m.geometry),new THREE.LineBasicMaterial({color:0x5a3a9a}));e.position.copy(m.position);city.add(e)}
-    else if(l.used==="park"){const g=new THREE.Mesh(new THREE.PlaneGeometry(LOT-.6,LOT-.6),new THREE.MeshBasicMaterial({color:0x0e3a2a}));g.rotation.x=-Math.PI/2;g.position.set(l.x,.03,l.z);city.add(g);lotOutline(l,"#5dffb0",.4);for(let t=0;t<5;t++){const tr=new THREE.Mesh(new THREE.ConeGeometry(.45,1.4,6),new THREE.MeshBasicMaterial({color:0x3ddc97}));tr.position.set(l.x+(rnd()-.5)*3,.7,l.z+(rnd()-.5)*3);city.add(tr)}}
-    else if(l.used==="rubble"){lotOutline(l,"#3a1f6b",.35);for(let t=0;t<3;t++){const rb=new THREE.Mesh(new THREE.BoxGeometry(.6+rnd(),.3+rnd()*.4,.6+rnd()),new THREE.MeshBasicMaterial({color:0x1d1040}));rb.position.set(l.x+(rnd()-.5)*2.5,.2,l.z+(rnd()-.5)*2.5);rb.rotation.y=rnd()*3;city.add(rb)}}
+    else if(l.used==="fill"){const fl=l.ring===1?2+Math.floor(rnd()*5):1+Math.floor(rnd()*2);const fw=2+rnd()*1.4,fd=2+rnd()*1.4,x=l.x+(rnd()-.5)*.8,z=l.z+(rnd()-.5)*.8,hh=fl*INFILL_FLOOR;
+      INS.add("fill"+fl,()=>new THREE.BoxGeometry(1,hh,1),fillMat(fl),x,hh/2,z,0,fw,1,fd);
+      const c=[[-fw/2,-fd/2],[fw/2,-fd/2],[fw/2,fd/2],[-fw/2,fd/2]];for(let i=0;i<4;i++){const a=c[i],b=c[(i+1)%4];fillEdges.push(x+a[0],0,z+a[1],x+b[0],0,z+b[1],x+a[0],hh,z+a[1],x+b[0],hh,z+b[1],x+a[0],0,z+a[1],x+a[0],hh,z+a[1])}
+      roofs.push({x,z,y:hh,fw,fd})}
+    else if(l.used==="park"){const g=new THREE.Mesh(new THREE.PlaneGeometry(LOT-.6,LOT-.6),new THREE.MeshBasicMaterial({color:0x0e3a2a}));g.rotation.x=-Math.PI/2;g.position.set(l.x,.03,l.z);city.add(g);lotOutline(l,"#5dffb0",.4);for(let t=0;t<5;t++)INS.add("tree",()=>new THREE.ConeGeometry(.45,1.4,6),new THREE.MeshBasicMaterial({color:0x3ddc97}),l.x+(rnd()-.5)*3,.7,l.z+(rnd()-.5)*3)}
+    else if(l.used==="rubble"){lotOutline(l,"#3a1f6b",.35);for(let t=0;t<3;t++){const sx=.6+rnd(),sy=.3+rnd()*.4,sz=.6+rnd(),x=l.x+(rnd()-.5)*2.5,z=l.z+(rnd()-.5)*2.5;INS.add("rubble",()=>new THREE.BoxGeometry(1,1,1),new THREE.MeshBasicMaterial({color:0x1d1040}),x,.2,z,rnd()*3,sx,sy,sz)}}
     else if(l.used==="zoned"){lotOutline(l,"#3a1f6b",.25)}
   });
   // roads, and streetlights by level: ring r lit when LEVEL >= r+2 (far corners need 7)
   const half=BLOCKS*PITCH/2;const pts=[];for(let k=0;k<=BLOCKS;k++){const c=(k-2.5)*PITCH;[-ROAD/2,ROAD/2].forEach(o=>{pts.push(new THREE.Vector3(c+o,.01,-half),new THREE.Vector3(c+o,.01,half));pts.push(new THREE.Vector3(-half,.01,c+o),new THREE.Vector3(half,.01,c+o))})}
   city.add(new THREE.LineSegments(new THREE.BufferGeometry().setFromPoints(pts),new THREE.LineBasicMaterial({color:0x2cf4ff,transparent:true,opacity:.35})));
-  lots.forEach(l=>{const litLevel=l.corner?7:l.ring+2;if(LEVEL<litLevel)return;const sx=l.x+(l.bi<2?-1:1)*(LOT/2-.2),sz=l.z+(l.bj<2?-1:1)*(LOT/2-.2);const pole=new THREE.Mesh(new THREE.BoxGeometry(.08,2.2,.08),new THREE.MeshBasicMaterial({color:0x5a3a9a}));pole.position.set(sx,1.1,sz);city.add(pole);const lamp=new THREE.Mesh(new THREE.SphereGeometry(.14,6,6),new THREE.MeshBasicMaterial({color:0xffd166}));lamp.position.set(sx,2.3,sz);city.add(lamp)});
-  // monorail at level 4
-  if(LEVEL>=4){const R=PITCH*1.45,H=RAIL_H;const curve=new THREE.EllipseCurve(0,0,R,R,0,Math.PI*2,false,0);const rp=curve.getPoints(96).map(p=>new THREE.Vector3(p.x,H,p.y));city.add(new THREE.Line(new THREE.BufferGeometry().setFromPoints(rp),new THREE.LineBasicMaterial({color:0xff3cac})));
-    for(let k=0;k<12;k++){const a=k/12*Math.PI*2;const pylon=new THREE.Mesh(new THREE.BoxGeometry(.18,H,.18),new THREE.MeshBasicMaterial({color:0x5a3a9a}));pylon.position.set(Math.cos(a)*R,H/2,Math.sin(a)*R);city.add(pylon)}
-    for(let c=0;c<3;c++){const car=new THREE.Mesh(new THREE.BoxGeometry(1.6,.5,.6),new THREE.MeshBasicMaterial({color:0xff3cac}));city.add(car);trains.push({m:car,off:c*.06,R,H})}}
+  OL.done(city);INS.done(city);
+  if(fillEdges.length){const g=new THREE.BufferGeometry();g.setAttribute("position",new THREE.Float32BufferAttribute(fillEdges,3));city.add(new THREE.LineSegments(g,new THREE.LineBasicMaterial({color:0x5a3a9a})))}
+  const lights={};lots.forEach(l=>{const litLevel=l.corner?7:l.ring+2;if(LEVEL<litLevel)return;const I=lights[litLevel]||(lights[litLevel]=instancer());const sx=l.x+(l.bi<2?-1:1)*(LOT/2-.2),sz=l.z+(l.bj<2?-1:1)*(LOT/2-.2);
+    I.add("pole",()=>new THREE.BoxGeometry(.08,2.2,.08),new THREE.MeshBasicMaterial({color:0x5a3a9a}),sx,1.1,sz);I.add("lamp",()=>new THREE.SphereGeometry(.14,6,6),new THREE.MeshBasicMaterial({color:0xffd166}),sx,2.3,sz)});
+  Object.entries(lights).forEach(([lv,I])=>I.done(ug(+lv)));
+  // level 4: monorail over the road between the inner and outer rings, so it never cuts through a building
+  if(LEVEL>=4)monorail(ug(4),1.5*PITCH,9.4,0xff3cac,3,.035);
+  // level 5: holo billboards on infill roofs
+  if(LEVEL>=5){const G=ug(5),cols=["#ff3cac","#2cf4ff","#ffd166"];roofs.forEach(r=>{if(rnd2()>.5)return;const hex=cols[Math.floor(rnd2()*3)];const bb=new THREE.Group();bb.position.set(r.x,r.y,r.z);bb.rotation.y=Math.floor(rnd2()*4)*Math.PI/2;
+    const panel=new THREE.Mesh(new THREE.PlaneGeometry(2.4,.9),new THREE.MeshBasicMaterial({map:signTex(SIGN_WORDS[Math.floor(rnd2()*SIGN_WORDS.length)],hex),transparent:true,opacity:.92,side:THREE.DoubleSide}));panel.position.y=1.35;bb.add(panel);
+    const pm=new THREE.MeshBasicMaterial({color:0x3a2a66});for(const sx of[-.8,.8]){const post=new THREE.Mesh(new THREE.BoxGeometry(.06,.9,.06),pm);post.position.set(sx,.45,0);bb.add(post)}
+    if(rnd2()<.3)blinkers.push({m:panel,kind:"flicker",ph:rnd2()*9});G.add(bb)})}
+  // level 6: skyline towers ring the city, low near the camera's path and taller further out
+  if(LEVEL>=6){const G=ug(6),stex=windowTex("#8c6bd8",.3,606),mat=new THREE.MeshStandardMaterial({map:stex,emissive:0x6a4bb0,emissiveMap:stex,emissiveIntensity:.38,color:0x0e0820,roughness:.8}),em=new THREE.LineBasicMaterial({color:0x3a1f6b});
+    const I=instancer(),ep=[];for(let i=0;i<30;i++){const a=i/30*Math.PI*2+rnd2()*.12,r=40+rnd2()*12,hgt=7+rnd2()*9+(r-40)*.4,w=2.2+rnd2()*2,x=Math.cos(a)*r,z=Math.sin(a)*r;
+      I.add("tower",()=>new THREE.BoxGeometry(1,1,1),mat,x,hgt/2,z,a,w,hgt,w);I.add("tip",()=>new THREE.SphereGeometry(.3,6,6),new THREE.MeshBasicMaterial({color:0xff4d6d}),x,hgt+.4,z);
+      const ca=Math.cos(a),sa=Math.sin(a),h2=w/2,cn=[[-h2,-h2],[h2,-h2],[h2,h2],[-h2,h2]].map(([u,v])=>[x+u*ca+v*sa,z-u*sa+v*ca]);for(let k=0;k<4;k++){const p0=cn[k],p1=cn[(k+1)%4];ep.push(p0[0],0,p0[1],p1[0],0,p1[1],p0[0],hgt,p0[1],p1[0],hgt,p1[1],p0[0],0,p0[1],p0[0],hgt,p0[1])}}
+    I.done(G);const eg=new THREE.BufferGeometry();eg.setAttribute("position",new THREE.Float32BufferAttribute(ep,3));G.add(new THREE.LineSegments(eg,em));
+    const tips=G.children.find(o=>o.isInstancedMesh&&o.geometry.type==="SphereGeometry");if(tips)blinkers.push({m:tips,kind:"blink",ph:0})}
+  // level 8: a second monorail on the outer boundary road
+  if(LEVEL>=8)monorail(ug(8),2.5*PITCH,13,0x2cf4ff,2,-.022);
+  // level 9: flying traffic
+  if(LEVEL>=9){const G=ug(9);for(let i=0;i<10;i++){const horiz=i%2===0,y=20+rnd2()*10,c=(rnd2()-.5)*60;const m=new THREE.Mesh(new THREE.BoxGeometry(horiz?1:.4,.25,horiz?.4:1),new THREE.MeshBasicMaterial({color:i%3?0x2cf4ff:0xffd166}));if(horiz)m.position.set((rnd2()-.5)*140,y,c);else m.position.set(c,y,(rnd2()-.5)*140);G.add(m);fliers.push({m,horiz,v:(rnd2()<.5?-1:1)*(9+rnd2()*7)})}}
+  // level 10: searchlights sweep the sky from the downtown core
+  if(LEVEL>=10){const G=ug(10);[[1,1],[-1,1],[-1,-1],[1,-1]].forEach(([sx,sz],i)=>{const g=new THREE.ConeGeometry(3.2,70,20,1,true);g.translate(0,-35,0);g.rotateX(Math.PI);
+    const cone=new THREE.Mesh(g,new THREE.MeshBasicMaterial({color:i%2?0x2cf4ff:0xffd166,transparent:true,opacity:.11,depthWrite:false,side:THREE.DoubleSide,blending:THREE.AdditiveBlending,fog:false}));
+    const piv=new THREE.Group();piv.position.set(sx*PITCH*.5,0,sz*PITCH*.5);piv.add(cone);G.add(piv);searchlights.push({piv,ph:i*1.7})})}
   // traffic
   for(let i=0;i<14;i++){const horiz=i%2===0;const k=Math.floor(rnd()*(BLOCKS+1));const c=(k-2.5)*PITCH+(rnd()<.5?-.9:.9);const m=new THREE.Mesh(new THREE.BoxGeometry(horiz?.9:.45,.3,horiz?.45:.9),new THREE.MeshBasicMaterial({color:i%3?0xff3cac:0x2cf4ff}));const s=(rnd()-.5)*2*half;if(horiz)m.position.set(s,.2,c);else m.position.set(c,.2,s);city.add(m);cars.push({m,horiz,v:(rnd()<.5?-1:1)*(5+rnd()*5),half})}
 }
@@ -349,10 +457,11 @@ function animateChanges(prev,prevLevel){
     if(it.landed&&b.crown){b.crown.scale.set(1,.001,1);b.crown.visible=!reduce}
     if(reduce){if(it.landed)queue.push({t,fn:n=>land(b,n)}),t+=2500;return}
     setShown(b,it.from);
-    for(let k=it.from+1;k<=to;k++){const kk=k;queue.push({t,fn:()=>{setShown(b,kk);b.flash.position.y=(kk-1)*FLOOR+FLOOR/2;b.flashAt=performance.now();SHOW.floors++}});t+=step}
+    for(let k=it.from+1;k<=to;k++){const kk=k;queue.push({t,fn:()=>{setShown(b,kk);b.flash.position.y=(kk-1)*b.FH+b.FH/2;const fs=b.floors[kk-1].s;b.flash.scale.set(fs,1,fs);b.flashAt=performance.now();SHOW.floors++}});t+=step}
     t+=250;
     if(it.landed){queue.push({t,fn:n=>land(b,n)});t+=2600}});
-  if(prevLevel&&LEVEL>prevLevel){queue.push({t:t+300,fn:()=>{SHOW.levelups++;toast("CITY LEVEL "+LEVEL,UNLOCKS[LEVEL-1]?UNLOCKS[LEVEL-1][1]:"Level up",`${STATS.xp} XP`,"lvl");sting("M")}})}
+  if(prevLevel&&LEVEL>prevLevel){const fresh=unlockGroups.filter((g,lv)=>g&&lv>prevLevel);if(!reduce)fresh.forEach(g=>{g.scale.set(1,.001,1);g.visible=false});
+    queue.push({t:t+300,fn:n=>{fresh.forEach(g=>{g.visible=true;g.userData.growAt=n});SHOW.levelups++;toast("CITY LEVEL "+LEVEL,UNLOCKS[LEVEL-1]?UNLOCKS[LEVEL-1][1]:"Level up",`${STATS.xp} XP`,"lvl");sting("M")}})}
 }
 
 // ---------- since your last visit: kept in this browser, one record per machine ----------
@@ -442,14 +551,22 @@ function placeLabels(){
   Object.assign(LSTATS,st);
 }
 
+// add #fps to the page address for a frame-rate readout (for checking the laptop)
+const PERF={calls:0,tris:0,n:0,at:0};let fpsEl=null;
+function fpsCheck(){const on=/fps/i.test(location.hash);if(on&&!fpsEl){fpsEl=document.createElement("div");fpsEl.className="fps";host.appendChild(fpsEl)}else if(!on&&fpsEl){fpsEl.remove();fpsEl=null}}
+fpsCheck();addEventListener("hashchange",fpsCheck);
 let last=0;
 function frame(now){const dt=Math.min(.05,(now-last)/1000||0);last=now;const t=now/1000;
   while(queue.length&&queue[0].t<=now)queue.shift().fn(now);
   const want=spinOn&&now-idleAt>IDLE_MS?.05:0;spinV+=(want-spinV)*Math.min(1,dt*1.5);az+=dt*spinV;if(tgtGoal)tgt.lerp(tgtGoal,.06);place();
   if(!reduce){cars.forEach(c=>{const ax=c.horiz?"x":"z";c.m.position[ax]+=c.v*dt;if(c.m.position[ax]>c.half+6)c.m.position[ax]=-c.half-6;if(c.m.position[ax]<-c.half-6)c.m.position[ax]=c.half+6});
-    trains.forEach(tr=>{const a=t*.25+tr.off*Math.PI*2;tr.m.position.set(Math.cos(a)*tr.R,tr.H+.35,Math.sin(a)*tr.R);tr.m.rotation.y=-a})}
+    trains.forEach(tr=>{const u=(((t*tr.speed+tr.u0)%1)+1)%1;const q=tr.curve.getPointAt(u),d=tr.curve.getTangentAt(u);tr.m.position.set(q.x,q.y+.35,q.z);tr.m.rotation.y=-Math.atan2(d.z,d.x)});
+    fliers.forEach(f=>{const ax=f.horiz?"x":"z";f.m.position[ax]+=f.v*dt;if(f.m.position[ax]>75)f.m.position[ax]=-75;if(f.m.position[ax]<-75)f.m.position[ax]=75});
+    searchlights.forEach(s=>{s.piv.rotation.set(.32+.12*Math.sin(t*.4+s.ph),t*.22+s.ph,0,"YXZ")});
+    blinkers.forEach(k=>{if(k.kind==="blink")k.m.visible=Math.sin(t*2.4+k.ph)>.2;else k.m.material.opacity=Math.sin(t*13+k.ph)>-.85?.92:.25})}
+  unlockGroups.forEach(g=>{if(!g)return;const k=(now-g.userData.growAt)/1400;if(k>=0&&k<1.2)g.scale.y=Math.max(.001,1-Math.pow(1-Math.min(1,k),3))});
   buildings.forEach((b,i)=>{
-    if(!reduce){if(b.crane)b.crane.jib.rotation.y=Math.sin(t*.35+i)*1.2;if(b.beacon){const on=b.p.lane==="blocked"?(Math.sin(t*6)>0):b.p.lane==="waiting"?(Math.sin(t*2)>-.3):(Math.sin(t*1.5+i)>-.6);b.beacon.material.color.set(on?C[b.p.lane]:"#2a1550")}
+    if(!reduce){if(b.crane&&!b.stale)b.crane.jib.rotation.y=Math.sin(t*.35+i)*1.2;if(b.beacon){const on=b.p.lane==="parked"?true:b.p.lane==="blocked"?(Math.sin(t*6)>0):b.p.lane==="waiting"?(Math.sin(t*(b.stale?.7:2))>-.3):(Math.sin(t*1.5+i)>-.6);b.beacon.material.color.set(on?(b.p.lane==="parked"||b.stale?"#4a5677":C[b.p.lane]):"#2a1550")}
       b.ring.material.opacity=selected===b.p.id?.5+.3*Math.sin(t*4):hoverId===b.p.id?.35:0}
     else b.ring.material.opacity=selected===b.p.id?.7:0;
     // a floor that just lit flashes white for a moment
@@ -462,7 +579,8 @@ function frame(now){const dt=Math.min(.05,(now-last)/1000||0);last=now;const t=n
           if(b.beacon)b.beacon.material.color.set(Math.sin(now/60)>0?"#ffffff":C.landed)}}
       else{b.burst.visible=false;b.beam.visible=false}}
   });
-  renderer.render(scene,camera);
+  renderer.render(scene,camera);PERF.calls=renderer.info.render.calls;PERF.tris=renderer.info.render.triangles;PERF.n++;
+  if(fpsEl&&now-PERF.at>=500){fpsEl.textContent=`FPS ${Math.round(PERF.n*1000/(now-PERF.at))} · ${PERF.calls} DRAW CALLS · ${Math.round(PERF.tris/1000)}K TRIANGLES`;PERF.n=0;PERF.at=now}
   placeLabels();
   requestAnimationFrame(frame)}
 
@@ -541,6 +659,7 @@ async function boot(){
   else{mode="needs-permission";setButtons();snapLabel("CLICK ALLOW VAULT ACCESS TO GO LIVE");renderSince("CLICK ALLOW VAULT ACCESS TO SEE WHAT CHANGED SINCE YOUR LAST VISIT.")}
 }
 window.MC={render,refresh:()=>refresh(true),view:(a,p,r)=>{az=a;pol=p;rad=r;setSpin(false);tgtGoal=null;tgt.set(0,5,0)},state:()=>({mode,lastRefresh,projects:PROJECTS,warnings:WARNINGS,level:LEVEL,stats:STATS,buildings:buildings.length,
-  towers:buildings.map(b=>({id:b.p.id,floors:b.N,shown:b.shown,lane:b.p.lane,crown:!!b.crown})),queue:queue.length,show:{...SHOW},sound:{...SOUND,on:soundOn},labels:{...LSTATS},visit:visit&&{src:visit.src,base:visit.base}})};
+  towers:buildings.map(b=>({id:b.p.id,floors:b.N,shown:b.shown,lane:b.p.lane,crown:!!b.crown,kind:b.p.kind,roof:b.roof.visible,height:+(b.topY).toFixed(2),stale:b.stale,tarp:b.p.lane==="parked"})),
+  unlocks:unlockGroups.map((g,lv)=>g?lv:0).filter(Boolean),perf:{calls:PERF.calls,tris:PERF.tris},queue:queue.length,show:{...SHOW},sound:{...SOUND,on:soundOn},labels:{...LSTATS},visit:visit&&{src:visit.src,base:visit.base}})};
 boot();
 </script>

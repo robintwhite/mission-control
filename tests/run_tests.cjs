@@ -160,7 +160,7 @@ async function main() {
     await pg.waitForFunction(() => window.MC && document.getElementById("src").textContent.length > 0);
     return { ctx, pg };
   }
-  const state = pg => pg.evaluate(() => { const s = MC.state(); return { mode: s.mode, projects: s.projects, warnings: s.warnings, level: s.level, buildings: s.buildings }; });
+  const state = pg => pg.evaluate(() => { const s = MC.state(); return { mode: s.mode, projects: s.projects, warnings: s.warnings, level: s.level, buildings: s.buildings, towers: s.towers }; });
   const srcText = pg => pg.textContent("#src");
   const stubPicker = (pg, files, name) => pg.evaluate(([files, name]) => { window.FAKE = makeFakeVault(name, __decode(files)); window.showDirectoryPicker = async () => window.FAKE; }, [files, name]);
   const waitLive = pg => pg.waitForFunction(() => document.getElementById("src").classList.contains("live") || document.getElementById("src").classList.contains("err"), null, { timeout: 15000 });
@@ -231,6 +231,9 @@ async function main() {
     const items = await pg.locator("#warnlist li").count();
     ok(sum === `⚠ ${edgePy.warnings.length} WARNINGS` && items === edgePy.warnings.length && await pg.isVisible("#warnlist"), `C. warnings panel: "${sum}", opens to ${items} lines`);
     ok(await pg.evaluate(() => !document.querySelector(".card .n b") && document.querySelector('.card[data-id="quotes"] .n').textContent.includes("</script><b>x</b>")), "C. note text is escaped, not run as HTML");
+    const tw = s.towers || (await pg.evaluate(() => MC.state().towers));
+    const parked = tw.find(t => t.id === "parked"), old = tw.find(t => t.id === "olddate");
+    ok(parked && parked.tarp && parked.lane === "parked" && old && old.stale > 60, `C. parked site under a tarp; stale building rusts (${old && old.stale} days)`);
     await pg.screenshot({ path: path.join(OUT, "warnings.png") });
     await ctx.close();
   }
@@ -320,7 +323,12 @@ async function main() {
     const got = s.towers.map(t => [t.id, t.floors, t.shown]).sort().join(";");
     ok(got === want, `I. ${s.towers.length} towers: height = size, lit floors = progress (${realPy.projects.map(p => p.code + " " + p.lit + "/" + p.floors).join(", ")})`);
     ok(s.stats.xp === realPy.stats.xp && s.level === realPy.stats.level, `I. HUD uses size-weighted XP: ${s.stats.xp} XP (${s.stats.lit} lit + ${s.stats.bonus} landing bonus), level ${s.level}`);
-    ok(s.towers.filter(t => t.lane === "landed").every(t => t.crown), "I. every landed building wears a crown");
+    ok(s.towers.filter(t => t.lane === "landed").every(t => t.crown && t.roof), "I. every landed building wears a crown and its finished roof");
+    const FH = { software: 1.2, making: 0.96, hardware: 1.2, career: 1.2, athletics: 1.08 };
+    ok(s.towers.every(t => Math.abs(t.height - t.floors * FH[t.kind]) < 0.02 && t.roof === (t.shown === t.floors)), `I. shape by kind: floor height per kind, roof only once topped out (${[...new Set(s.towers.map(t => t.kind))].join(", ")})`);
+    ok(JSON.stringify(s.unlocks) === JSON.stringify(Array.from({ length: s.level - 1 }, (_, i) => i + 2).filter(l => l !== 7 || s.level >= 7)), `I. level ${s.level} draws its unlocks: groups for levels ${s.unlocks.join(", ")}`);
+    ok(s.perf.calls > 0 && s.perf.calls < 600, `I. ${s.perf.calls} draw calls, ${Math.round(s.perf.tris / 1000)}K triangles (budget 600 calls)`);
+    ok(await pg.evaluate(() => !document.querySelector('link[href*="fonts.googleapis"]') && document.fonts.check("700 14px Rajdhani") && document.fonts.check("12px 'Share Tech Mono'") && document.fonts.check("40px Monoton")), "I. fonts are built into the page (no Google Fonts link) and loaded");
     ok(/FIRST VISIT/.test(await pg.textContent("#since")), `I. first visit on this browser: "${await pg.textContent("#since")}"`);
     ok(s.queue === 0 && s.show.floors === 0 && s.show.landings === 0, "I. first visit: nothing to animate");
     await ctx.close();
@@ -394,7 +402,22 @@ async function main() {
     ok(t.lane === "landed" && t.crown && s.stats.xp === realPy.stats.xp + (target.floors - target.lit) + target.floors, `L. ${target.code} (${target.size}) landed on Refresh: crown, +${target.floors - target.lit} floors and +${target.floors} landing bonus, ${s.stats.xp} XP, level ${lv0} -> ${s.level}`);
     ok(s.sound.stings >= 1 && s.sound.notes > 0, `L. after a click the sting plays: ${s.sound.notes} notes`);
     ok((await pg.textContent("#since")).includes(`${target.code} LANDED`), `L. strip: "${await pg.textContent("#since")}"`);
-    if (s.level > lv0) { await pg.waitForFunction(() => MC.state().show.levelups === 1, null, { timeout: 20000 }); ok(/CITY LEVEL/.test(await pg.textContent("#toast")), `L. level up toast: "${(await pg.textContent("#toast")).replace(/\s+/g, " ")}"`); }
+    if (s.level > lv0) { await pg.waitForFunction(() => MC.state().show.levelups === 1, null, { timeout: 20000 }); ok(/CITY LEVEL/.test(await pg.textContent("#toast")), `L. level up toast: "${(await pg.textContent("#toast")).replace(/\s+/g, " ")}"`);
+      await pg.waitForTimeout(1600);
+      ok(await pg.evaluate(lv => MC.state().unlocks.includes(lv), s.level), `L. level ${s.level}'s new things rise in on the level up`); }
+    await ctx.close();
+  }
+  // N. levels 7 to 10 draw something; the #fps readout
+  {
+    const { ctx, pg } = await open(page + "#fps");
+    await pg.evaluate(() => { const ps = JSON.parse(JSON.stringify(MC.state().projects)); ps.forEach(p => { if (p.lane !== "landed") { p.lane = "landed"; p.progress = 100; p.lit = p.floors; } }); MC.render({ projects: ps, warnings: [] }); });
+    await pg.waitForTimeout(900);
+    const s = await pg.evaluate(() => MC.state());
+    ok(s.level >= 10 && [7, 8, 9, 10].every(l => s.unlocks.includes(l)), `N. everything landed: level ${s.level}, ${s.stats.xp} XP, unlock groups ${s.unlocks.join(", ")}`);
+    ok(s.perf.calls < 700, `N. full city: ${s.perf.calls} draw calls, ${Math.round(s.perf.tris / 1000)}K triangles`);
+    ok(/^FPS \d+ · \d+ DRAW CALLS/.test(await pg.textContent(".fps")), `N. #fps readout: "${await pg.textContent(".fps")}"`);
+    await pg.evaluate(() => MC.view(-0.4, 1.0, 120)); await pg.waitForTimeout(500);
+    await pg.screenshot({ path: path.join(OUT, "level10.png") });
     await ctx.close();
   }
   // M. labels never overlap, from several angles and at phone width; reduced motion skips the show
