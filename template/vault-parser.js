@@ -1,6 +1,6 @@
 /* Mission Control vault parser.
  * A line-for-line port of collect() in build.py, so the page can read the vault itself.
- * Keep the two in step: tests/run_tests.mjs checks them against each other on a real vault.
+ * Keep the two in step: tests/run_tests.cjs checks them against each other on a real vault.
  * Works in the browser (window.MCParser) and in Node (module.exports).
  * Input: a directory handle (File System Access API) for the vault root, or anything with
  * the same shape: getDirectoryHandle(name), entries(), and getFile() on file handles. */
@@ -9,7 +9,17 @@
   const LANES = ["ready", "waiting", "blocked", "parked", "landed"];
   const KINDS = ["software", "making", "hardware", "career", "athletics"];
   const SIZES = ["S", "M", "L", "XL"];
+  const SIZE_FLOORS = { S: 6, M: 10, L: 16, XL: 24 }; // building height by size (v0.2)
   const STALE_DAYS = 30;
+  const XP_PER_LEVEL = 30; // city XP per level. XP = lit floors, plus the building's floors again when it lands
+  // progress % of the building's floors, rounded half up. Integer maths, so it matches build.py exactly
+  const litFloors = (progress, floors) => Math.floor((2 * progress * floors + 100) / 200);
+  function cityStats(projects) {
+    let lit = 0, bonus = 0;
+    for (const p of projects) { lit += p.lit; if (p.lane === "landed") bonus += p.floors; }
+    const xp = lit + bonus;
+    return { lit, bonus, xp, level: 1 + Math.floor(xp / XP_PER_LEVEL), per_level: XP_PER_LEVEL };
+  }
 
   // Python's str.isspace() set, so strip() and \s behave the same as in build.py
   const WS = "\\t\\n\\v\\f\\r\\x1c-\\x1f \\x85\\xa0\\u1680\\u2000-\\u200a\\u2028\\u2029\\u202f\\u205f\\u3000";
@@ -177,7 +187,8 @@
       id: truthy(get("project")) ? pyStr(get("project")) : slug(name),
       code, name, lane, progress,
       north: s("northstar"), next: s("next"), wait: s("waiting_on"), updated,
-      completed: s("completed"), stale, area: s("area"), kind, size, note: rel,
+      completed: s("completed"), stale, area: s("area"), kind, size,
+      floors: SIZE_FLOORS[size], lit: litFloors(progress, SIZE_FLOORS[size]), note: rel,
       link: "obsidian://open?vault=" + vaultName + "&file=" + quote(rel),
     };
   }
@@ -225,7 +236,7 @@
     return { projects: sortProjects(projects), warnings: warnings.sort(cmp) };
   }
 
-  const api = { collectVault, parseFrontmatter, titleOf, slug, parseNote, localISODate, LANES, KINDS, SIZES };
+  const api = { collectVault, parseFrontmatter, titleOf, slug, parseNote, localISODate, cityStats, litFloors, LANES, KINDS, SIZES, SIZE_FLOORS, XP_PER_LEVEL };
   if (typeof module !== "undefined" && module.exports) module.exports = api;
   else root.MCParser = api;
 })(typeof window !== "undefined" ? window : globalThis);

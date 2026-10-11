@@ -38,10 +38,10 @@ Every project note carries these in its frontmatter:
 code: EDG                 # 3-letter call sign shown on the building
 name: "Edge AI Home Lab"  # optional short display name; the note title is used when absent
 northstar: "One line on what the project is building."
-progress: 60              # 0 to 100. One floor per 10%.
+progress: 60              # 0 to 100. The lit share of the building's floors.
 lane: ready               # ready | waiting | blocked | parked   (landed from status: completed; status: parked also gives parked)
-kind: hardware            # software | making | hardware | career | athletics. Sets the building shape (v0.2)
-size: XL                  # S | M | L | XL. Sets the building height (v0.2): 6, 10, 16, 24 floors
+kind: hardware            # software | making | hardware | career | athletics. Will set the building shape (v0.2 step 3)
+size: XL                  # S | M | L | XL. Sets the building height: 6, 10, 16, 24 floors
 next: "The next concrete step."
 waiting_on: ""            # what Robin has to do or what is blocking; empty when nothing
 ```
@@ -53,7 +53,8 @@ Rules (the same in `build.py` and `template/vault-parser.js`):
 - A project with no valid `lane` is skipped, with a warning.
 - `progress` that is not a number (including `60 # comment`) counts as 0, with a warning. It is clamped to 0 to 100.
 - STALE: `updated` (or, if the note has none, the note file's modified date) more than 30 days old. Not for parked or landed projects. An `updated` that is not a real date is a warning.
-- `kind` and `size` are passed to the page; a missing or invalid one is a warning (size falls back to M). The page does not draw them yet (v0.2).
+- `size` sets the floors: S 6, M 10, L 16, XL 24. Lit floors = `progress` % of those, rounded half up (50% of S = 3, 25% of S = 2). Both parsers add `floors` and `lit` to each project, with integer maths so they agree exactly.
+- `kind` is passed to the page but not drawn yet (shapes are v0.2 step 3). A missing or invalid `kind` or `size` is a warning (size falls back to M).
 - An empty `northstar` or `next` on a project that has not landed is a warning.
 - `name` falls back to the note's `# ` heading (leading emoji, "Project " and " MOC" removed), then the file name. `code` falls back to the first three letters of the name.
 
@@ -75,15 +76,34 @@ Needs Node 18+ and Playwright with its Chromium (dev only). Writes to `tests/out
 1. Parity: `build.py --dump` and `vault-parser.js` give identical projects and warnings, in the same order, on the real vault and on a generated edge-case vault (BOM, CRLF, bad lanes, bad dates, lists, odd file names, invalid UTF-8).
 2. In headless Chromium, on the page opened from `file://`: the snapshot fallback; Connect vault with the picker stubbed by a fake folder, and parity again in the browser; Refresh after an edit and a new note, with no reload; the warnings panel; a folder that is not the vault; a stored folder that needs one Allow click; a stored folder already allowed; IndexedDB on `file://`; a real folder handle kept in IndexedDB across a reload (over `http://127.0.0.1`, since the origin private file system is blocked on `file://`); the mirror build; a browser without folder access; no console errors.
 
-The folder picker itself and Chrome's permission prompt cannot be automated. Those need a person: see the vault note §9.
+3. City (added in v0.2 step 2): heights from size and lit floors from progress for every building; size-weighted XP and level, the same in Python and JS; first visit; "since your last visit" with a seeded record (strip text, floors lighting one by one, the landing moment, selection, clicking a strip item, a reload in the same sitting, the next visit); the sound toggle and its memory; a project landing on Refresh (crown, XP, sting, level-up toast); no label over another label or the HUD from six camera angles and at phone width; reduced motion.
+
+The folder picker itself, Chrome's permission prompt and whether sound is heard cannot be automated. Those need a person: see the vault note §9.
 
 ## City rules (in the template)
 
 - Downtown core: landed. Inner ring: ready. Outer ring: waiting on me. Far corners: blocked.
-- City XP = floors built (one floor per 10% of a project). 30 floors per level.
+- City XP = lit floors, plus a landing bonus equal to the building's floors when it lands (an XL landing is worth 24 more, an S landing 6). 30 XP per level. `cityStats()` in `vault-parser.js` and `city_stats()` in `build.py` compute it; the tests check they agree.
+- Height comes from `size`. Within each zone the tallest buildings take the lots nearest the centre.
 - Levels unlock: roads and core (1), streetlights (2), inner-ring infill and parks (3), monorail (4), outer-ring infill and billboards (5), skyline towers (6), far-corner lights (7), second monorail (8). Levels 5 to 8 are declared but not all drawn yet; see the vault note's Phase 5.
 - Infill placement is seeded, so the city does not reshuffle between refreshes.
 - A lane whose zone is full (the core has 4 lots) spills to the nearest free lot, so a fifth landed project still gets a building.
+
+## Since your last visit, and the landing moment
+
+- The page remembers what it last showed, in this browser (`localStorage`, one record per machine). Nothing is written to the vault.
+- On open it compares with that record. A strip under the status line lists what changed (`HKY +2 FLOORS`, `MCD LANDED`, `NEW · WEB`, a rescope, a lane change) and the XP gained. Click an item to select that building. New floors light up one by one in the city.
+- The connected page compares its first live read. If Chrome needs the ALLOW VAULT ACCESS click, the strip waits for it. A page that cannot go live (the phone mirror, Firefox, a vault not connected yet) compares the snapshot.
+- A reload within 30 minutes keeps the same comparison, so the strip does not vanish on F5. After 30 minutes away, the next open compares with what you last saw.
+- The first open on a browser has nothing to compare with; the strip says so.
+- After a Refresh, whatever changed since the previous read plays the same way.
+- **Landing:** the crown (spire, halo, beacon) grows on top, a ring bursts out and a beam of light goes up, the building is selected, a toast shows the landing bonus, and a short synth sting plays (longer for L and XL). A level up gets its own toast.
+- **Sound** is on by default. ♪ SOUND ON / OFF at the bottom right of the city, remembered in this browser. Chrome only plays sound after a click or key press on the page; a sting asked for before that waits up to 20 s for the first click, then is dropped. The light show runs either way.
+- Reduced motion: no floor-by-floor show, floors appear at once; landings still toast.
+
+## Labels
+
+Labels are placed nearest building first. A label that would cover another moves up a row (with a thin leader line back to its building) or to the side. If there is no room it hides until you hover the building. The selected and hovered labels always show. The HUD, legend and buttons count as taken space.
 
 ## Known limits
 

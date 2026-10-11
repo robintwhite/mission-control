@@ -13,7 +13,9 @@
  *    stored handle that needs one Allow click, stored handle already allowed, a real
  *    FileSystemDirectoryHandle kept in IndexedDB across a reload (via the origin private file
  *    system, since the folder picker cannot be automated), the mirror build, a browser with no
- *    folder access, and no console errors anywhere. */
+ *    folder access, and no console errors anywhere.
+ * 3. The city (v0.2 step 2): heights from size, lit floors, size-weighted XP, "since your last visit",
+ *    the landing moment and sound toggle, labels that never overlap, reduced motion. */
 const fs = require("fs"), path = require("path"), os = require("os"), { execFileSync } = require("child_process");
 const { makeVault } = require("./fake-vault.js");
 const P = require("../template/vault-parser.js");
@@ -120,6 +122,13 @@ async function main() {
   const realPy = await nodeParity("real vault", VAULT);
   const edgePy = await nodeParity("edge vault", edgeDir);
   ok(edgePy.warnings.length >= 12 && edgePy.projects.length >= 20, `edge vault exercises the rules (${edgePy.projects.length} projects, ${edgePy.warnings.length} warnings)`);
+  for (const [name, d] of [["real vault", realPy], ["edge vault", edgePy]]) {
+    const js = P.cityStats(d.projects);
+    ok(JSON.stringify(js) === JSON.stringify(d.stats), `city XP parity on ${name}: ${JSON.stringify(js)}`);
+  }
+  const lits = [[50, 24, 12], [50, 6, 3], [25, 6, 2], [5, 16, 1], [3, 16, 0], [99, 6, 6], [100, 24, 24], [0, 10, 0], [45, 10, 5], [35, 10, 4]];
+  ok(lits.every(([p, n, want]) => P.litFloors(p, n) === want), "lit floors round half up: " + lits.map(([p, n, w]) => `${p}% of ${n} = ${P.litFloors(p, n)}`).join(", "));
+  ok(realPy.projects.every(p => p.floors === P.SIZE_FLOORS[p.size] && p.lit === P.litFloors(p.progress, p.floors)), "real vault: every project's floors come from its size (S 6, M 10, L 16, XL 24)");
 
   console.log("2. Build");
   const page = path.join(OUT, "mc.html"), mirror = path.join(OUT, "mc-mirror.html");
@@ -302,6 +311,120 @@ async function main() {
     const o = await open(page, "delete window.showDirectoryPicker; delete Window.prototype.showDirectoryPicker;");
     ok(/NEEDS CHROME OR EDGE/.test(await srcText(o.pg)) && !(await o.pg.isVisible("#connect")), `H. no folder access (Firefox, Obsidian viewer): "${await srcText(o.pg)}"`);
     await o.ctx.close();
+  }
+  // I. heights from size, lit floors from progress
+  {
+    const { ctx, pg } = await open(page);
+    const s = await pg.evaluate(() => MC.state());
+    const want = realPy.projects.map(p => [p.id, p.floors, p.lit]).sort().join(";");
+    const got = s.towers.map(t => [t.id, t.floors, t.shown]).sort().join(";");
+    ok(got === want, `I. ${s.towers.length} towers: height = size, lit floors = progress (${realPy.projects.map(p => p.code + " " + p.lit + "/" + p.floors).join(", ")})`);
+    ok(s.stats.xp === realPy.stats.xp && s.level === realPy.stats.level, `I. HUD uses size-weighted XP: ${s.stats.xp} XP (${s.stats.lit} lit + ${s.stats.bonus} landing bonus), level ${s.level}`);
+    ok(s.towers.filter(t => t.lane === "landed").every(t => t.crown), "I. every landed building wears a crown");
+    ok(/FIRST VISIT/.test(await pg.textContent("#since")), `I. first visit on this browser: "${await pg.textContent("#since")}"`);
+    ok(s.queue === 0 && s.show.floors === 0 && s.show.landings === 0, "I. first visit: nothing to animate");
+    await ctx.close();
+  }
+  // J. since your last visit (snapshot page, vault not connected), the landing moment, and the strip across reloads
+  {
+    const ready = realPy.projects.find(p => p.lane === "ready" && p.lit >= 3);
+    const landed = realPy.projects.find(p => p.lane === "landed");
+    const gone = realPy.projects.find(p => p.lane === "waiting");
+    const map = {};
+    realPy.projects.forEach(p => { map[p.id] = { lit: p.lit, floors: p.floors, lane: p.lane, code: p.code, name: p.name, progress: p.progress }; });
+    map[ready.id].lit -= 3;
+    map[landed.id] = { ...map[landed.id], lane: "ready", lit: landed.floors - 2, progress: 80 };
+    delete map[gone.id];
+    const before = Date.now() - 2 * 3600e3;
+    const oldXp = realPy.stats.xp - 3 - 2 - landed.floors - gone.lit;
+    const rec = { base: { at: before - 3600e3, map, xp: oldXp, level: 1 + Math.floor(oldXp / 30) }, cur: { at: before, map, xp: oldXp, level: 1 + Math.floor(oldXp / 30) } };
+    const seed = `if(!sessionStorage.getItem("seeded")){localStorage.setItem("mc-visit-v1:snap",${JSON.stringify(JSON.stringify(rec))});sessionStorage.setItem("seeded","1")}`;
+    const { ctx, pg } = await open(page, seed);
+    const strip = await pg.textContent("#since");
+    ok(strip.includes(`${ready.code} +3 FLOORS`) && strip.includes(`${landed.code} LANDED`) && strip.includes(`NEW · ${gone.code}`) && /\+\d+ XP/.test(strip), `J. strip: "${strip}"`);
+    const t0 = await pg.evaluate(id => MC.state().towers.find(t => t.id === id).shown, ready.id);
+    ok(t0 === ready.lit - 3, `J. on open, ${ready.code} starts at its old ${t0} lit floors`);
+    await pg.waitForFunction(() => MC.state().show.landings === 1, null, { timeout: 15000 });
+    await pg.waitForTimeout(700);
+    await pg.screenshot({ path: path.join(OUT, "landing.png") });
+    ok(/LANDED/.test(await pg.textContent("#toast")) && await pg.evaluate(() => document.getElementById("toast").classList.contains("show")), `J. landing moment: toast "${(await pg.textContent("#toast")).replace(/\s+/g, " ")}"`);
+    await pg.waitForFunction(() => MC.state().queue === 0, null, { timeout: 15000 });
+    const s = await pg.evaluate(() => MC.state());
+    ok(s.towers.every(t => t.shown === realPy.projects.find(p => p.id === t.id).lit), "J. after the show every building is at its real lit floors");
+    ok(s.show.floors === 3 + 2 + gone.lit, `J. ${s.show.floors} new floors lit one by one (3 + 2 + ${gone.lit} for the new building)`);
+    ok(s.sound.on && s.sound.stings >= 1, `J. landing sting asked for (sound on by default; ${s.sound.notes} notes played before any click)`);
+    ok(await pg.evaluate(id => MC.state().projects.find(p => p.lane === "landed" && p.id === id) && document.querySelector(".card.sel").dataset.id === id, landed.id), `J. the landed building is selected during its moment`);
+    const btn = pg.locator(`#since button[data-id="${ready.id}"]`);
+    await btn.click();
+    ok(await pg.evaluate(id => document.querySelector(".card.sel").dataset.id === id, ready.id), "J. clicking a strip item selects that building");
+    await pg.reload(); await pg.waitForFunction(() => window.MC && document.getElementById("since").textContent.length > 0);
+    ok((await pg.textContent("#since")).includes(`${landed.code} LANDED`), "J. a reload in the same sitting keeps the strip");
+    await pg.evaluate(() => { const k = "mc-visit-v1:snap", r = JSON.parse(localStorage.getItem(k)); r.cur.at -= 3 * 3600e3; localStorage.setItem(k, JSON.stringify(r)); });
+    await pg.reload(); await pg.waitForFunction(() => window.MC && document.getElementById("since").textContent.length > 0);
+    ok(/NOTHING NEW/.test(await pg.textContent("#since")) && (await pg.evaluate(() => MC.state().queue)) === 0, `J. next visit (over 30 min later): "${await pg.textContent("#since")}"`);
+    await ctx.close();
+  }
+  // K. sound toggle, remembered in this browser
+  {
+    const { ctx, pg } = await open(page);
+    ok((await pg.getAttribute("#snd", "aria-pressed")) === "true" && (await pg.textContent("#snd")) === "♪ SOUND ON", "K. sound on by default");
+    await pg.click("#snd");
+    ok((await pg.textContent("#snd")) === "♪ SOUND OFF" && await pg.evaluate(() => localStorage.getItem("mc-sound")) === "off", "K. click turns it off and it is remembered");
+    await pg.reload(); await pg.waitForFunction(() => window.MC);
+    ok((await pg.textContent("#snd")) === "♪ SOUND OFF", "K. still off after a reload");
+    await ctx.close();
+  }
+  // L. live: a project lands on Refresh. First live read is a first visit; the Refresh plays the moment
+  {
+    const { ctx, pg } = await open(page);
+    await stubPicker(pg, realFiles, "robin-personal");
+    await pg.click("#connect");
+    await waitLive(pg);
+    const target = realPy.projects.filter(p => p.lane !== "landed").sort((a, b) => b.floors - a.floors)[0];
+    const lv0 = await pg.evaluate(() => MC.state().level);
+    await pg.evaluate(([note]) => {
+      const parts = (note + ".md").split("/"); let n = FAKE._node; for (const p of parts.slice(0, -1)) n = n.children.get(p);
+      const f = n.children.get(parts[parts.length - 1]).file;
+      f.bytes = new TextEncoder().encode(new TextDecoder().decode(f.bytes).replace(/^status:.*$/m, "status: completed\ncompleted: 2026-10-11"));
+    }, [target.note]);
+    await pg.click("#refresh");
+    await pg.waitForFunction(() => MC.state().show.landings === 1, null, { timeout: 20000 });
+    const s = await pg.evaluate(() => MC.state());
+    const t = s.towers.find(x => x.id === target.id);
+    ok(t.lane === "landed" && t.crown && s.stats.xp === realPy.stats.xp + (target.floors - target.lit) + target.floors, `L. ${target.code} (${target.size}) landed on Refresh: crown, +${target.floors - target.lit} floors and +${target.floors} landing bonus, ${s.stats.xp} XP, level ${lv0} -> ${s.level}`);
+    ok(s.sound.stings >= 1 && s.sound.notes > 0, `L. after a click the sting plays: ${s.sound.notes} notes`);
+    ok((await pg.textContent("#since")).includes(`${target.code} LANDED`), `L. strip: "${await pg.textContent("#since")}"`);
+    if (s.level > lv0) { await pg.waitForFunction(() => MC.state().show.levelups === 1, null, { timeout: 20000 }); ok(/CITY LEVEL/.test(await pg.textContent("#toast")), `L. level up toast: "${(await pg.textContent("#toast")).replace(/\s+/g, " ")}"`); }
+    await ctx.close();
+  }
+  // M. labels never overlap, from several angles and at phone width; reduced motion skips the show
+  {
+    const { ctx, pg } = await open(page);
+    let worst = 0, moved = 0, hidden = 0;
+    for (const [az, pol, rad] of [[-0.6, 1.06, 111], [0.5, 1.06, 111], [1.6, 0.8, 90], [2.7, 1.3, 140], [3.9, 1.06, 60], [5.0, 0.5, 111]]) {
+      await pg.evaluate(([a, p, r]) => MC.view(a, p, r), [az, pol, rad]);
+      await pg.waitForTimeout(250);
+      const r = await pg.evaluate(() => { const ls = [...document.querySelectorAll(".lbl")].filter(e => e.style.display !== "none" && !e.classList.contains("on")).map(e => e.getBoundingClientRect()); const hud = document.getElementById("hud").getBoundingClientRect(); let ov = ls.filter(a => a.left < hud.right && hud.left < a.right && a.top < hud.bottom && hud.top < a.bottom).length; ls.push(...[...document.querySelectorAll(".lbl.on")].map(e => e.getBoundingClientRect())); for (let i = 0; i < ls.length; i++) for (let j = i + 1; j < ls.length; j++) { const a = ls[i], b = ls[j]; if (a.left < b.right && b.left < a.right && a.top < b.bottom && b.top < a.bottom) ov++; } return { ov, st: MC.state().labels }; });
+      worst = Math.max(worst, r.ov); moved += r.st.moved; hidden += r.st.hidden;
+    }
+    await pg.evaluate(() => MC.view(-0.6, 1.06, 111)); await pg.waitForTimeout(300);
+    await pg.screenshot({ path: path.join(OUT, "labels.png"), clip: { x: 300, y: 150, width: 800, height: 520 } });
+    ok(worst === 0, `M. no label overlaps another label or the HUD, from 6 camera angles (${moved} moved up with a leader line, ${hidden} hidden until hovered, over all angles)`);
+    await pg.setViewportSize({ width: 390, height: 900 }); await pg.waitForTimeout(400);
+    const ph = await pg.evaluate(() => { const ls = [...document.querySelectorAll(".lbl")].filter(e => e.style.display !== "none" && !e.classList.contains("on")).map(e => e.getBoundingClientRect()); const hud = document.getElementById("hud").getBoundingClientRect(); let ov = ls.filter(a => a.left < hud.right && hud.left < a.right && a.top < hud.bottom && hud.top < a.bottom).length; ls.push(...[...document.querySelectorAll(".lbl.on")].map(e => e.getBoundingClientRect())); for (let i = 0; i < ls.length; i++) for (let j = i + 1; j < ls.length; j++) { const a = ls[i], b = ls[j]; if (a.left < b.right && b.left < a.right && a.top < b.bottom && b.top < a.bottom) ov++; } return { ov, n: ls.length, sw: document.documentElement.scrollWidth }; });
+    ok(ph.ov === 0 && ph.sw <= 390, `M. phone width: ${ph.n} labels, none over another or the HUD, no sideways scroll`);
+    await pg.screenshot({ path: path.join(OUT, "phone.png"), fullPage: false });
+    await ctx.close();
+    const map = {}; realPy.projects.forEach(p => { map[p.id] = { lit: 0, floors: p.floors, lane: "ready", code: p.code, name: p.name, progress: 0 }; });
+    const rec = { base: { at: Date.now() - 9e6, map, xp: 0, level: 1 }, cur: { at: Date.now() - 9e6, map, xp: 0, level: 1 } };
+    const c2 = await browser.newContext({ reducedMotion: "reduce", viewport: { width: 1400, height: 1000 } });
+    await c2.route(/fonts\.(googleapis|gstatic)\.com/, r => r.fulfill({ status: 200, contentType: "text/css", body: "" }));
+    const p2 = await c2.newPage(); p2.on("pageerror", e => errors.push("reduced: " + e.message));
+    await p2.addInitScript(`localStorage.setItem("mc-visit-v1:snap",${JSON.stringify(JSON.stringify(rec))})`);
+    await p2.goto(url(page)); await p2.waitForFunction(() => window.MC && MC.state().towers.length > 0);
+    const s2 = await p2.evaluate(() => MC.state());
+    ok(s2.towers.every(t => t.shown === realPy.projects.find(p => p.id === t.id).lit) && s2.show.floors === 0, "M. reduced motion: floors shown at once, no floor-by-floor show");
+    await c2.close();
   }
   ok(errors.length === 0, `no console errors or page errors${errors.length ? ":\n    " + errors.join("\n    ") : ""}`);
   await browser.close();

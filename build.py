@@ -7,7 +7,7 @@ into the template, and writes `<vault>/00 Home/Mission Control.html`.
 
 The page reads the vault itself once connected (Connect vault, then Refresh), using
 template/vault-parser.js. That file is a port of collect() below. Keep the two in step;
-tests/run_tests.mjs checks them against each other.
+tests/run_tests.cjs checks them against each other.
 
 Standard library only. No installs needed.
 
@@ -31,7 +31,22 @@ CANDIDATES = [os.environ.get("MC_VAULT", ""), r"E:\ObsidianVaults\robin-personal
 LANES = ["ready", "waiting", "blocked", "parked", "landed"]
 KINDS = {"software", "making", "hardware", "career", "athletics"}
 SIZES = {"S", "M", "L", "XL"}
+SIZE_FLOORS = {"S": 6, "M": 10, "L": 16, "XL": 24}  # building height by size (v0.2)
 STALE_DAYS = 30
+XP_PER_LEVEL = 30  # city XP per level. XP = lit floors, plus the building's floors again when it lands
+
+
+def lit_floors(progress, floors):
+    """progress % of the building's floors, rounded half up. Integer maths, so Python and JS agree exactly."""
+    return (2 * progress * floors + 100) // 200
+
+
+def city_stats(projects):
+    """City XP and level. Same formula as cityStats() in template/vault-parser.js."""
+    lit = sum(p["lit"] for p in projects)
+    bonus = sum(p["floors"] for p in projects if p["lane"] == "landed")
+    xp = lit + bonus
+    return {"lit": lit, "bonus": bonus, "xp": xp, "level": 1 + xp // XP_PER_LEVEL, "per_level": XP_PER_LEVEL}
 
 
 def find_vault(explicit):
@@ -155,7 +170,8 @@ def collect(vault, today):
                     "north": str(fm.get("northstar") or ""), "next": str(fm.get("next") or ""),
                     "wait": str(fm.get("waiting_on") or ""), "updated": updated,
                     "completed": str(fm.get("completed") or ""), "stale": stale,
-                    "area": str(fm.get("area") or ""), "kind": kind, "size": size, "note": rel,
+                    "area": str(fm.get("area") or ""), "kind": kind, "size": size,
+                    "floors": SIZE_FLOORS[size], "lit": lit_floors(progress, SIZE_FLOORS[size]), "note": rel,
                     "link": "obsidian://open?vault=" + VAULT_NAME + "&file=" + quote(rel),
                 })
     projects.sort(key=lambda p: (LANES.index(p["lane"]), -p["progress"], p["name"], p["note"]))
@@ -187,11 +203,12 @@ def main():
     for w in warnings:
         print("warning:", w)
     counts = {l: sum(p["lane"] == l for p in projects) for l in LANES}
-    floors = sum(int(p["progress"] / 10 + 0.5) for p in projects)  # same rounding as the page (Math.round)
-    print(f"{len(projects)} projects: {counts}; {floors} floors built, city level {1 + floors // 30}; {len(warnings)} warnings")
+    st = city_stats(projects)
+    print(f"{len(projects)} projects: {counts}; {st['lit']} floors lit + {st['bonus']} landing bonus = {st['xp']} XP, "
+          f"city level {st['level']}; {len(warnings)} warnings")
     if a.dump:
         with open(a.dump, "w", encoding="utf-8") as f:
-            json.dump({"projects": projects, "warnings": warnings}, f, ensure_ascii=False, indent=1)
+            json.dump({"projects": projects, "warnings": warnings, "stats": st}, f, ensure_ascii=False, indent=1)
     if a.check:
         return
     tpl = open(TEMPLATE, encoding="utf-8").read()
