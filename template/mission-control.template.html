@@ -35,7 +35,7 @@ header .sub{position:relative;grid-column:1;grid-row:1;align-self:end;margin-bot
 .city .ctl button{font-family:var(--mono);font-size:11px;letter-spacing:.15em;color:var(--cyan);background:rgba(11,6,24,.78);border:1px solid var(--line);padding:6px 10px;cursor:pointer}
 .city .ctl button[aria-pressed="false"]{color:var(--dim)}
 .city .ctl button:focus-visible{outline:1px solid var(--cyan)}
-.city .hint{right:200px}
+.city .hint{right:330px}
 .fps{position:absolute;left:14px;bottom:30px;z-index:4;font-family:var(--mono);font-size:11px;letter-spacing:.12em;color:var(--green);background:rgba(11,6,24,.8);border:1px solid var(--line);padding:4px 8px}
 .leaders{position:absolute;inset:0;width:100%;height:100%;pointer-events:none;z-index:3;overflow:visible}
 .leaders line{stroke:#d9ccf5;stroke-opacity:.6;stroke-width:1}
@@ -164,6 +164,7 @@ footer{font-family:var(--mono);font-size:11px;color:var(--dim);letter-spacing:.0
         <div>SHAPE = KIND · TARP = PARKED · DARK, THEN RUST = STALE</div>
         <div>HQ AND ITS BOARD ON THE SQUARE · THE CITY GROWS EACH LEVEL</div>
         <div>THE FIRST LANDING OF A KIND BUILDS ITS LANDMARK ON A NEW BLOCK</div>
+        <div>THE CITY STARTS DARK AND BRIGHTENS WITH ITS LEVEL · GLOW = POST-PROCESSING QUALITY</div>
         <div>CLICK EMPTY GROUND OR PRESS ESC TO CLEAR THE SELECTION</div>
       </div>
     </div>
@@ -173,6 +174,7 @@ footer{font-family:var(--mono);font-size:11px;color:var(--dim);letter-spacing:.0
     <div class="ctl">
       <button id="snd" type="button" aria-pressed="true" title="Landing sound on/off. Remembered in this browser.">♪ SOUND ON</button>
       <button class="spin" id="spin" type="button" aria-pressed="false" title="Auto spin on/off (Space). Off by default, remembered in this browser. When on, it resumes 10 s after you stop dragging.">■ SPIN OFF</button>
+      <button class="glow" id="glow" type="button" aria-pressed="true" title="Glow quality: click to cycle HIGH, LOW, OFF. Remembered in this browser. HIGH: bloom at half resolution, filmic tone mapping, a vignette. LOW: bloom at quarter resolution. OFF: no post-processing (use it on a slow machine).">✦ GLOW HIGH</button>
     </div>
     <div class="scan"></div>
   </div>
@@ -268,7 +270,7 @@ function mulberry(a){return function(){a|=0;a=a+0x6D2B79F5|0;let t=Math.imul(a^a
 function hashStr(s){let h=2166136261;for(const ch of String(s)){h^=ch.codePointAt(0);h=Math.imul(h,16777619)}return h>>>0}
 const host=$("city");
 const reduce=matchMedia("(prefers-reduced-motion: reduce)").matches;
-const renderer=new THREE.WebGLRenderer({antialias:true,alpha:true});renderer.setClearColor(0x000000,0);renderer.setPixelRatio(Math.min(devicePixelRatio,2));host.prepend(renderer.domElement);
+const renderer=new THREE.WebGLRenderer({antialias:true,alpha:true});renderer.setClearColor(0x000000,0);renderer.setPixelRatio(Math.min(devicePixelRatio,2));renderer.info.autoReset=false;host.prepend(renderer.domElement);
 const scene=new THREE.Scene();scene.fog=new THREE.Fog(0x0b0618,300,500);
 const camera=new THREE.OrthographicCamera(-10,10,10,-10,1,1200);
 // flat-shaded look: a violet sky light, a warm key from one side and a cool rim from the other, so each face of a block reads differently
@@ -326,7 +328,13 @@ function shellShader(sh,span,round){sh.vertexShader=sh.vertexShader.replace("#in
 #endif`)}
 // Light modes. Only a landed building (and HQ) has its lights on. An active site shows a few warm work lights; a stopped one is dark.
 const LIGHT={lit:1,work:.75,off:0,infill:.32};
-function facadeMat(style,hex,mode,round){const work=mode==="work",m=new THREE.MeshLambertMaterial({color:0xffffff,map:TEX[style].map,emissive:new THREE.Color(work?WORK_HEX:hex),emissiveMap:work?TEX[style].work:TEX[style].emis,emissiveIntensity:LIGHT[mode]});
+// the city brightens with its level (art pass 4): dim windows, half-strength neon and no glow at level 1; full neon and
+// full glow by level 10. win scales the lit windows, neon the edge strips and roof lights, bloom the glow pass, boards
+// the share of infill roofs that get a holo billboard (from level 5)
+const PROG=lv=>{const k=Math.max(0,Math.min(1,(lv-1)/9));return{k:+k.toFixed(3),win:+(.42+.58*k).toFixed(3),neon:+(.5+.5*k).toFixed(3),bloom:+k.toFixed(3),boards:+(.2+.3*k).toFixed(3)}};
+let CITY_K=PROG(1),BLOOM_K=0;
+const neonK=hex=>new THREE.Color(hex).multiplyScalar(CITY_K.neon);
+function facadeMat(style,hex,mode,round){const work=mode==="work",m=new THREE.MeshLambertMaterial({color:0xffffff,map:TEX[style].map,emissive:new THREE.Color(work?WORK_HEX:hex),emissiveMap:work?TEX[style].work:TEX[style].emis,emissiveIntensity:LIGHT[mode]*(mode==="work"?1:CITY_K.win)});m.userData.mode=mode;
   m.onBeforeCompile=sh=>facadeShader(sh,4.4,round);m.customProgramCacheKey=()=>"facade"+(round?"r":"");return m}
 function shellMat(tex,span,opt){const m=new (opt.lit?THREE.MeshLambertMaterial:THREE.MeshBasicMaterial)(Object.assign({color:0xffffff,map:tex,side:THREE.DoubleSide},opt.params||{}));
   m.onBeforeCompile=sh=>shellShader(sh,span,opt.round);m.customProgramCacheKey=()=>"shell"+span+(opt.round?"r":"");return m}
@@ -361,14 +369,16 @@ function pool(key,mkGeo,mkMat,parent){let p=pools[key];if(!p){p=new Pool(mkGeo()
 const G={box:()=>new THREE.BoxGeometry(1,1,1),cyl:()=>new THREE.CylinderGeometry(.5,.5,1,10),cylLo:()=>new THREE.CylinderGeometry(.5,.5,1,8),
   sphere:()=>new THREE.IcosahedronGeometry(.5,0),half:()=>new THREE.SphereGeometry(.5,12,6,0,Math.PI*2,0,Math.PI/2),cone:()=>new THREE.ConeGeometry(.5,1,6),
   ring:()=>{const g=new THREE.RingGeometry(.86,1,32);g.rotateX(-Math.PI/2);return g},torus:()=>{const g=new THREE.TorusGeometry(.5,.06,4,14);g.rotateX(Math.PI/2);return g},tooth:toothGeo};
-const lam=()=>new THREE.MeshLambertMaterial({color:0xffffff}),bas=()=>new THREE.MeshBasicMaterial({color:0xffffff});
+// a light: drawn as it is in the glow pass (art pass 4). Everything not marked is painted black there, so it never blooms
+const lit=m=>{m.userData.glow="self";return m};
+const lam=()=>new THREE.MeshLambertMaterial({color:0xffffff}),bas=()=>lit(new THREE.MeshBasicMaterial({color:0xffffff}));
 const P_={
   facade:(style,hex,mode,round)=>pool(`f|${style}|${mode==="work"?WORK_HEX:mode==="off"?0:hex}|${mode}|${round?1:0}`,round?G.cyl:G.box,()=>facadeMat(style,hex,mode,round)),
   solid:()=>pool("solid",G.box,lam),cyl:()=>pool("cyl",G.cyl,lam),glow:()=>pool("glow",G.box,bas),strip:()=>pool("strip",()=>sidesBox,bas),pipe:()=>pool("pipe",()=>new THREE.CylinderGeometry(.5,.5,1,6,1,true),lam),
   scaf:r=>pool("scaf"+(r?"r":""),()=>r?sidesCyl:sidesBox,()=>shellMat(TEX.scaf,1.6,{round:r,params:{alphaTest:.5}})),
   net:r=>pool("net"+(r?"r":""),()=>r?sidesCyl:sidesBox,()=>shellMat(TEX.net,1.2,{round:r,params:{transparent:true,opacity:.42,depthWrite:false}})),
   frame:r=>pool("frame"+(r?"r":""),()=>r?sidesCyl:sidesBox,()=>shellMat(TEX.frame,1.5,{round:r,params:{alphaTest:.5}})),
-  holo:r=>pool("holo"+(r?"r":""),()=>r?sidesCyl:sidesBox,()=>shellMat(TEX.holo,1.5,{round:r,params:{transparent:true,opacity:.5,depthWrite:false,blending:THREE.AdditiveBlending}})),
+  holo:r=>pool("holo"+(r?"r":""),()=>r?sidesCyl:sidesBox,()=>lit(shellMat(TEX.holo,1.5,{round:r,params:{transparent:true,opacity:.5,depthWrite:false,blending:THREE.AdditiveBlending}}))),
   tarp:r=>pool("tarp"+(r?"r":""),r?G.cylLo:G.box,()=>new THREE.MeshLambertMaterial({color:0xffffff,map:TEX.tarp,emissive:0x1a2a66})),
   ring:()=>pool("ring",G.ring,()=>new THREE.MeshBasicMaterial({color:0xffffff,transparent:true,opacity:.85,depthWrite:false,blending:THREE.AdditiveBlending,side:THREE.DoubleSide})),
   // the landed ring: wider, solid green, doubled and pulsing slowly (set per frame), so it never reads like an in-progress ring
@@ -377,10 +387,12 @@ const P_={
   tooth:()=>pool("tooth",G.tooth,lam),torus:()=>pool("torus",G.torus,bas),tree:()=>pool("tree",G.sphere,lam),cone:()=>pool("cone",G.cone,lam),
   tape:()=>pool("tape",G.box,()=>new THREE.MeshBasicMaterial({map:TEX.tape})),
   // a thin flat neon ring for the landmark plinths (the torus above gets thick when scaled up)
-  thinRing:()=>pool("thinRing",()=>{const g=new THREE.RingGeometry(.47,.5,40);g.rotateX(-Math.PI/2);return g},()=>new THREE.MeshBasicMaterial({color:0xffffff,side:THREE.DoubleSide})),
+  thinRing:()=>pool("thinRing",()=>{const g=new THREE.RingGeometry(.47,.5,40);g.rotateX(-Math.PI/2);return g},()=>lit(new THREE.MeshBasicMaterial({color:0xffffff,side:THREE.DoubleSide}))),
 };
 // palette (walls) and neon (windows, signs, edges). Decoration never uses the lane colours, which belong to the status.
-const WALLS=[[0x9b2470,0xd2488f],[0x45308e,0x6d52cf],[0x22377c,0x3d63c4],[0x5b2066,0x8e3d9b],[0x7a1d5c,0xb23a86],[0x2f2a78,0x5047b8]];
+// walls (art pass 4): dark and grey with a hint of the old hue, so the lights carry the colour. The trim is a step lighter.
+// The landmarks, the train and the hover cars keep their own colours (LANDMARKS, HC below)
+const WALLS=[[0x4a2846,0x6b3b64],[0x2f2a4e,0x4a4374],[0x24304f,0x3b4b76],[0x3a2a4e,0x57406e],[0x45283d,0x673e5b],[0x2c2d48,0x46486e]];
 const NEON={cyan:0x2cf4ff,amber:0xffb347,pink:0xff5fbf,lav:0xb9a4ff};
 const RUST=new THREE.Color("#b4532a"),STEEL=0xffc93c,STEEL_RUST=0x9a5a32,TARPC=0x4f8dff,WORK_HEX=0xffb070,UNLIT=0x2c2448;
 
@@ -426,10 +438,10 @@ const heroMat=hex=>new THREE.MeshPhongMaterial({color:hex,flatShading:true,shini
 function makeHero(name,look,scale){const H=HERO.geo[name];if(!H)return null;const g=new THREE.Group();
   H.parts.forEach(p=>{let m;switch(p.role){
     case "body2":m=heroMat(new THREE.Color(look.wall).multiplyScalar(.68).getHex());break;
-    case "glass":m=new THREE.MeshBasicMaterial({color:look.glass||0xffe9b0});break;
-    case "neon":m=new THREE.MeshBasicMaterial({color:look.neon||NEON.pink});break;
-    case "lamp":m=new THREE.MeshBasicMaterial({color:0xffd166});break;
-    case "blink":m=new THREE.MeshBasicMaterial({color:0xff4d6d});break;
+    case "glass":m=lit(new THREE.MeshBasicMaterial({color:look.glass||0xffe9b0}));break;
+    case "neon":m=lit(new THREE.MeshBasicMaterial({color:look.neon||NEON.pink}));break;
+    case "lamp":m=lit(new THREE.MeshBasicMaterial({color:0xffd166}));break;
+    case "blink":m=lit(new THREE.MeshBasicMaterial({color:0xff4d6d}));break;
     case "dish":m=heroMat(0xb8b4d8);break;
     default:m=heroMat(look.wall)}
     const mesh=new THREE.Mesh(p.geo,m);mesh.scale.setScalar(scale);g.add(mesh);if(p.role==="blink")blinkers.push({m:mesh,kind:"blink",ph:hashStr(name)%7})});
@@ -439,7 +451,7 @@ let LANDMARK_STATE={},risers=[],SMOKE=[];
 let city=null,buildings=[],labels=[],pickables=[],cars=[],trains=[],queue=[],unlockGroups=[],signs=[],blinkers=[],fliers=[],searchlights=[],cranes=[],STREET={};
 const keepTex=t=>t&&t.userData&&t.userData.keep;
 function disposeCity(){if(!city)return;scene.remove(city);
-  city.traverse(o=>{if(o.geometry&&o.geometry!==sidesBox&&o.geometry!==sidesCyl&&!(o.geometry.userData&&o.geometry.userData.keep))o.geometry.dispose();const ms=Array.isArray(o.material)?o.material:o.material?[o.material]:[];ms.forEach(m=>{if(m.map&&!keepTex(m.map))m.map.dispose();m.dispose()})});
+  city.traverse(o=>{if(o.geometry&&o.geometry!==sidesBox&&o.geometry!==sidesCyl&&!(o.geometry.userData&&o.geometry.userData.keep))o.geometry.dispose();const ms=Array.isArray(o.material)?o.material:o.material?[o.material]:[];ms.forEach(m=>{if(m.map&&!keepTex(m.map))m.map.dispose();if(m.userData.glowMat){m.userData.glowMat.dispose();m.userData.glowMat=null}m.dispose()})});
   labels.forEach(L=>L.el.remove());city=null;buildings=[];labels=[];pickables=[];cars=[];trains=[];queue=[];unlockGroups=[];signs=[];blinkers=[];fliers=[];searchlights=[];cranes=[];pools={};poolList=[];risers=[];LANDMARK_STATE={};SMOKE=[]}
 
 // ---- signs: one atlas texture, one merged mesh per group of signs. Words are drawn in white and tinted per sign ----
@@ -456,7 +468,7 @@ function signBatch(atlas){const pos=[],uv=[],col=[];let n=0;
         const P=(a,b)=>[x+ox+ca*a*side,y+b,z+oz-sa*a*side];const q=[P(-w/2,-h/2),P(w/2,-h/2),P(w/2,h/2),P(-w/2,h/2)],t=[[u.u0,u.v0],[u.u1,u.v0],[u.u1,u.v1],[u.u0,u.v1]];
         for(const k of[0,1,2,0,2,3]){pos.push(...q[k]);uv.push(...t[k]);col.push(c.r,c.g,c.b)}}},
     mesh(){const g=new THREE.BufferGeometry();g.setAttribute("position",new THREE.Float32BufferAttribute(pos,3));g.setAttribute("uv",new THREE.Float32BufferAttribute(uv,2));g.setAttribute("color",new THREE.Float32BufferAttribute(col,3));
-      return new THREE.Mesh(g,new THREE.MeshBasicMaterial({map:atlas.t,vertexColors:true,transparent:true,alphaTest:.05,side:THREE.FrontSide}))}}}
+      return new THREE.Mesh(g,lit(new THREE.MeshBasicMaterial({map:atlas.t,vertexColors:true,transparent:true,alphaTest:.05,side:THREE.FrontSide})))}}}
 // merged static geometry (roads, sidewalks, marks): boxes with a colour each, one mesh per material
 function merger(){const pos=[],nor=[],col=[];const box=new THREE.BoxGeometry(1,1,1).toNonIndexed(),pa=box.attributes.position.array,na=box.attributes.normal.array;let n=0;
   return{n:()=>n,box(x,y,z,sx,sy,sz,hex,ry){const c=new THREE.Color(hex),ca=Math.cos(ry||0),sa=Math.sin(ry||0);n++;
@@ -496,7 +508,7 @@ function makeBuilding(p,lot,atlasCell,SB){
   const X=lot.x,Z=lot.z,wall=new THREE.Color(K.pal[0]),trim=new THREE.Color(K.pal[1]);if(rusty){wall.lerp(RUST,.55);trim.lerp(RUST,.55)}
   const steel=rusty?STEEL_RUST:STEEL,winHex=NEON[K.win];
   // lights: on only when landed; a few warm work lights on an active (ready or waiting) site; dark when stopped or stale
-  const mode=lane==="landed"?"lit":(lane==="ready"||lane==="waiting")&&!dim?"work":"off",EDGE=mode==="lit"?NEON[K.edge]:UNLIT;
+  const mode=lane==="landed"?"lit":(lane==="ready"||lane==="waiting")&&!dim?"work":"off",EDGE=mode==="lit"?neonK(NEON[K.edge]):UNLIT;
   const scaleAt=f=>{let s=1;for(const[fr,sc]of K.steps)if(N>=6&&f>0&&f>=Math.ceil(N*fr))s=sc;return s};
   const b={p,pos:new THREE.Vector3(X,0,Z),N,FH,topY,shown:n,kit:K,stale,round,mode,holoHex:laneHex,holoFull:false,floors:[],tog:{roof:[],crown:[],crane:[],props:[],fence:[],found:[],trees:[]},crownSlots:[],flashAt:-1e9,landAt:-1e9,lot};
   const slot=(list,P,m,col,on)=>list.push([P,P.add(m,col,on===undefined?false:on)]);
@@ -595,7 +607,7 @@ class LoopCurve extends THREE.Curve{constructor(half,h,r){super();this.half=half
       if(d<=qa){const th=a+d/r,cx=(H-r)*ca-(s/2)*sa,cz=(H-r)*sa+(s/2)*ca;return o.set(cx+r*Math.cos(th),this.h,cz+r*Math.sin(th))}d-=qa}
     return o.set(H,this.h,-s/2)}}
 function monorail(parent,half,h,hex,nCars,speed){const curve=new LoopCurve(half,h,4);
-  parent.add(new THREE.Mesh(new THREE.TubeGeometry(curve,160,.14,4,true),new THREE.MeshBasicMaterial({color:hex})));
+  parent.add(new THREE.Mesh(new THREE.TubeGeometry(curve,160,.14,4,true),lit(new THREE.MeshBasicMaterial({color:hex}))));
   const Pp=new Pool(G.box(),lam(),parent);for(let k=0;k<20;k++){const q=curve.getPointAt(k/20);Pp.add(M4(q.x,h/2,q.z,.22,h,.22),0x4a3a7a)}Pp.build();
   // the train: a head car, middle cars and the head again turned round as the tail, coupled close along the rail, so it
   // reads as one train. Built pieces with lit windows and a skirt in the loop's colour; the drawn box with a band if missing
@@ -604,7 +616,7 @@ function monorail(parent,half,h,hex,nCars,speed){const curve=new LoopCurve(half,
     const piece=head&&mid?(isHead||isTail?"train-head":"train-mid"):head?"train-head":null;
     if(piece){const body=makeHero(piece,{wall:0xb9a4ff,neon:hex,glass:0xffe9b0},TL);body.position.y=-.3;car.add(body);car.userData.hero=true;car.userData.role=isHead?"head":isTail?"tail":"mid"}
     else{const body=new THREE.Mesh(new THREE.BoxGeometry(1.7,.55,.7),new THREE.MeshLambertMaterial({color:0xb9a4ff}));car.add(body);
-      const band=new THREE.Mesh(new THREE.BoxGeometry(1.72,.12,.72),new THREE.MeshBasicMaterial({color:hex}));band.position.y=-.12;car.add(band)}
+      const band=new THREE.Mesh(new THREE.BoxGeometry(1.72,.12,.72),lit(new THREE.MeshBasicMaterial({color:hex})));band.position.y=-.12;car.add(band)}
     parent.add(car);trains.push({m:car,curve,u0:c*du,speed,flip:isTail})}}
 
 // ---- the landmark blocks (art pass 3): one hero piece per kind, on the block its kind's first landing gave it ----
@@ -686,6 +698,7 @@ function carCount(){return Math.min(48,4+3*(STATS.active7||0))}
 
 function buildCity(){
   disposeCity();city=new THREE.Group();scene.add(city);
+  CITY_K=PROG(LEVEL);BLOOM_K=CITY_K.bloom;
   const rnd2=mulberry(5150);
   const ug=lv=>{if(!unlockGroups[lv]){const g=new THREE.Group();g.userData.level=lv;g.userData.growAt=-1e9;unlockGroups[lv]=g;city.add(g)}return unlockGroups[lv]};
   // placement: projects sorted by start date take the lots in order. Status and progress never move a building
@@ -702,8 +715,9 @@ function buildCity(){
   // the street: blocks with sidewalks and lot pads, and roads round every open block (merged, a few draw calls)
   const MW=merger(),MR=merger(),MK=merger(),ME=merger();
   const blocks=new Map();lots.forEach(l=>blocks.set(l.i+","+l.j,l));
-  blocks.forEach(l=>{const bx=l.i*PITCH,bz=l.j*PITCH;MW.box(bx,.08,bz,BLOCK,.16,BLOCK,0x2b2152);
-    MW.box(bx,.165,bz,2*LOT,.02,2*LOT,l.square?0x2d2458:0x1b1436)});
+  // paving (art pass 4): darker than the walls used to be, so the street reads as ground and the lights as lights
+  blocks.forEach(l=>{const bx=l.i*PITCH,bz=l.j*PITCH;MW.box(bx,.08,bz,BLOCK,.16,BLOCK,0x1f1842);
+    MW.box(bx,.165,bz,2*LOT,.02,2*LOT,l.square?0x251d4a:0x14102a)});
   lots.forEach(l=>{if(l.used==="park")MW.box(l.x,.18,l.z,LOT-.3,.04,LOT-.3,0x0f4a34)});
   // road edges: h = along x on z-line `line`, v = along z on x-line `line`. Grid line k sits at (k - .5) * PITCH
   const edges=new Map(),nodes=new Map();
@@ -720,7 +734,7 @@ function buildCity(){
   if(tier>=2)nodes.forEach(n=>{if(n.arms.size<4)return;const cx=(n.lx-.5)*PITCH,cz=(n.lz-.5)*PITCH;
     for(const[dx,dz,rot]of[[0,-Math.sign(cz)||1,0],[-Math.sign(cx)||1,0,1]]){const ox=cx+dx*(ROAD/2+.55),oz=cz+dz*(ROAD/2+.55);
       for(let s=-1.05;s<=1.06;s+=.7){if(rot)MK.quad(ox,.013,oz+s,.9,.3,0x9d8bc4);else MK.quad(ox+s,.013,oz,.3,.9,0x9d8bc4)}walks++}});
-  city.add(MR.mesh(false));city.add(MW.mesh(true));if(MK.n())ug(3).add(MK.mesh(false));if(ME.n())ug(6).add(ME.mesh(false));
+  city.add(MR.mesh(false));city.add(MW.mesh(true));if(MK.n())ug(3).add(MK.mesh(false));if(ME.n()){const em=ME.mesh(false);lit(em.material);ug(6).add(em)}
   STREET={blocks:blocks.size,byLevel:plan.byLevel,need:plan.need,ring:plan.R,fullRing:plan.full,roads:edges.size,nodes:nodes.size,tier,marks,crosswalks:walks,neonEdges:neon,
     onRoad:[...blocks.values()].every(l=>["h|"+l.j+"|"+l.i,"h|"+(l.j+1)+"|"+l.i,"v|"+l.i+"|"+l.j,"v|"+(l.i+1)+"|"+l.j].every(k=>edges.has(k)))};
   // the buildings
@@ -752,7 +766,7 @@ function buildCity(){
   if(LEVEL>=4)monorail(ug(4),1.5*PITCH,9.4,0xff3cac,3,.03);
   // level 5: holo billboards on infill roofs
   if(LEVEL>=5){const G5=ug(5),BB=signBatch(atlas),PP=new Pool(G.box(),lam(),G5);const cols=[0xff3cac,0x2cf4ff,0xffd166];
-    lots.forEach(l=>{if(!l.roof||rnd2()>.5)return;const r=l.roof,hex=cols[Math.floor(rnd2()*3)],yaw=Math.floor(rnd2()*4)*Math.PI/2;
+    lots.forEach(l=>{if(!l.roof||rnd2()>CITY_K.boards)return;const r=l.roof,hex=cols[Math.floor(rnd2()*3)],yaw=Math.floor(rnd2()*4)*Math.PI/2;
       BB.add(r.x,r.y+1.35,r.z,yaw,2.3,.86,words.length+Math.floor(rnd2()*SIGN_WORDS.length),hex);for(const sx of[-.8,.8])PP.add(M4(r.x+Math.cos(yaw)*sx,r.y+.45,r.z-Math.sin(yaw)*sx,.07,.9,.07),0x3a2a66)});
     if(BB.n()){const m=BB.mesh();G5.add(m);blinkers.push({m,kind:"flicker",ph:rnd2()*9})}PP.build()}
   if(LEVEL>=8)monorail(ug(8),(Math.max(2,plan.full)+.5)*PITCH,13,0x2cf4ff,2,-.02);
@@ -761,13 +775,13 @@ function buildCity(){
   if(LEVEL>=9){const G9=ug(9),span=HALF+30,HG=HERO.geo.hovercar,HC=[0xd2488f,0x3d63c4,0x6d52cf,0xb23a86];
     for(let i=0;i<10;i++){const horiz=i%2===0,y=20+rnd2()*10,c=(rnd2()-.5)*HALF*1.4,v=(rnd2()<.5?-1:1)*(9+rnd2()*7);let m;
       if(HG){m=new THREE.Group();const body=makeHero("hovercar",{wall:HC[i%HC.length],neon:0x2cf4ff},1.7);body.position.y=-.25;m.add(body);
-        const lamp=new THREE.Mesh(G.box(),new THREE.MeshBasicMaterial({color:i%3?0x2cf4ff:0xffd166}));lamp.scale.set(.9,.08,.5);lamp.position.y=-.28;m.add(lamp);
+        const lamp=new THREE.Mesh(G.box(),lit(new THREE.MeshBasicMaterial({color:i%3?0x2cf4ff:0xffd166})));lamp.scale.set(.9,.08,.5);lamp.position.y=-.28;m.add(lamp);
         m.rotation.y=horiz?(v>0?0:Math.PI):(v>0?-Math.PI/2:Math.PI/2);m.userData.hero=true}
-      else m=new THREE.Mesh(new THREE.BoxGeometry(horiz?1:.4,.25,horiz?.4:1),new THREE.MeshBasicMaterial({color:i%3?0x2cf4ff:0xffd166}));
+      else m=new THREE.Mesh(new THREE.BoxGeometry(horiz?1:.4,.25,horiz?.4:1),lit(new THREE.MeshBasicMaterial({color:i%3?0x2cf4ff:0xffd166})));
       if(horiz)m.position.set((rnd2()-.5)*2*span,y,c);else m.position.set(c,y,(rnd2()-.5)*2*span);G9.add(m);fliers.push({m,horiz,span,v})}}
   // level 10: searchlights sweep the sky from the HQ roof
   if(LEVEL>=10){const G10=ug(10),hw=HQ.half*.75;[[1,1],[-1,1],[-1,-1],[1,-1]].forEach(([sx,sz],i)=>{const g=new THREE.ConeGeometry(3.2,70,20,1,true);g.translate(0,-35,0);g.rotateX(Math.PI);
-    const cone=new THREE.Mesh(g,new THREE.MeshBasicMaterial({color:i%2?0x2cf4ff:0xffd166,transparent:true,opacity:.11,depthWrite:false,side:THREE.DoubleSide,blending:THREE.AdditiveBlending,fog:false}));
+    const cone=new THREE.Mesh(g,lit(new THREE.MeshBasicMaterial({color:i%2?0x2cf4ff:0xffd166,transparent:true,opacity:.11,depthWrite:false,side:THREE.DoubleSide,blending:THREE.AdditiveBlending,fog:false})));
     const piv=new THREE.Group();piv.position.set(sx*hw,HQ.roofY,sz*hw);piv.add(cone);G10.add(piv);searchlights.push({piv,ph:i*1.7})})}
   // traffic: cars with headlights and tail lights on straight runs of road, two lanes each. The count follows activity
   const runs=[];
@@ -775,7 +789,7 @@ function buildCity(){
     [...byLine.keys()].sort((a,b)=>a-b).forEach(line=>{const cells=byLine.get(line).sort((a,b)=>a-b);let a=cells[0],prev=a;
       for(const c of cells.slice(1).concat([Infinity])){if(c!==prev+1){runs.push({horiz:o==="h",c:(line-.5)*PITCH,s0:(a-.5)*PITCH-ROAD/2,s1:(prev+.5)*PITCH+ROAD/2});a=c}prev=c}})}
   const total=runs.reduce((s,r)=>s+r.s1-r.s0,0);
-  const CB=P_.solid(),CH=pool("carlight",G.box,bas),CG=pool("carglow",()=>{const g=new THREE.PlaneGeometry(1,1);g.rotateX(-Math.PI/2);return g},()=>new THREE.MeshBasicMaterial({color:0xffffff,transparent:true,opacity:.22,depthWrite:false,blending:THREE.AdditiveBlending}));
+  const CB=P_.solid(),CH=pool("carlight",G.box,bas),CG=pool("carglow",()=>{const g=new THREE.PlaneGeometry(1,1);g.rotateX(-Math.PI/2);return g},()=>lit(new THREE.MeshBasicMaterial({color:0xffffff,transparent:true,opacity:.22,depthWrite:false,blending:THREE.AdditiveBlending})));
   const rc=mulberry(777),carCols=[0xd2488f,0x3d63c4,0x6d52cf,0xb9a4ff,0x8a5a46,0x2cf4ff],nCars=carCount();
   for(let i=0;i<nCars;i++){let pickL=rc()*total,run=runs[0];for(const r of runs){run=r;pickL-=r.s1-r.s0;if(pickL<=0)break}
     const dir=rc()<.5?1:-1,lane=run.c+dir*ROAD/4*(run.horiz?1:-1),col=carCols[Math.floor(rc()*carCols.length)];
@@ -792,10 +806,10 @@ function buildCity(){
   FX.sel=fx(G.ring(),new THREE.MeshBasicMaterial({color:0xff3cac,transparent:true,opacity:0,depthWrite:false,side:THREE.DoubleSide}));
   FX.hov=fx(G.ring(),new THREE.MeshBasicMaterial({color:0xff3cac,transparent:true,opacity:0,depthWrite:false,side:THREE.DoubleSide}));
   FX.spot=fx(spotGeo(),new THREE.MeshBasicMaterial({vertexColors:true,transparent:true,opacity:.5,depthWrite:false,side:THREE.DoubleSide,blending:THREE.AdditiveBlending,fog:false}));
-  FX.pool=fx(new THREE.CircleGeometry(1,32).rotateX(-Math.PI/2),new THREE.MeshBasicMaterial({color:0xfff1c9,transparent:true,opacity:.22,depthWrite:false,blending:THREE.AdditiveBlending}));
-  FX.flash=fx(new THREE.BoxGeometry(1,1,1),new THREE.MeshBasicMaterial({color:0xffffff,transparent:true,opacity:0,depthWrite:false,blending:THREE.AdditiveBlending}));
-  FX.burst=fx(G.ring(),new THREE.MeshBasicMaterial({color:C.landed,transparent:true,opacity:0,depthWrite:false,side:THREE.DoubleSide,blending:THREE.AdditiveBlending}));
-  FX.beam=fx(new THREE.CylinderGeometry(.35,1.1,60,16,1,true),new THREE.MeshBasicMaterial({color:C.landed,transparent:true,opacity:0,depthWrite:false,side:THREE.DoubleSide,blending:THREE.AdditiveBlending,fog:false}));
+  FX.pool=fx(new THREE.CircleGeometry(1,32).rotateX(-Math.PI/2),lit(new THREE.MeshBasicMaterial({color:0xfff1c9,transparent:true,opacity:.22,depthWrite:false,blending:THREE.AdditiveBlending})));
+  FX.flash=fx(new THREE.BoxGeometry(1,1,1),lit(new THREE.MeshBasicMaterial({color:0xffffff,transparent:true,opacity:0,depthWrite:false,blending:THREE.AdditiveBlending})));
+  FX.burst=fx(G.ring(),lit(new THREE.MeshBasicMaterial({color:C.landed,transparent:true,opacity:0,depthWrite:false,side:THREE.DoubleSide,blending:THREE.AdditiveBlending})));
+  FX.beam=fx(new THREE.CylinderGeometry(.35,1.1,60,16,1,true),lit(new THREE.MeshBasicMaterial({color:C.landed,transparent:true,opacity:0,depthWrite:false,side:THREE.DoubleSide,blending:THREE.AdditiveBlending,fog:false})));
   fitView();
 }
 const FX={},SPOT_H=320;
@@ -837,7 +851,7 @@ function buildSquare(ug,SB,hqCell){
   // level 6: a neon crown ring on the dome
   if(L_>=6){parts.push("dome neon");hp(6,"torus").add(M4(0,domeTop-.18*Rd,0,Rd*1.1,1,Rd*1.1),NEON.pink)}
   // level 7: a red aircraft light on top of the tower
-  if(L_>=7){parts.push("aircraft light");const lamp=new THREE.Mesh(G.sphere(),new THREE.MeshBasicMaterial({color:0xff4d6d}));lamp.position.set(0,top+.25,0);lamp.scale.setScalar(.4);ug(7).add(lamp);blinkers.push({m:lamp,kind:"blink",ph:1})}
+  if(L_>=7){parts.push("aircraft light");const lamp=new THREE.Mesh(G.sphere(),lit(new THREE.MeshBasicMaterial({color:0xff4d6d})));lamp.position.set(0,top+.25,0);lamp.scale.setScalar(.4);ug(7).add(lamp);blinkers.push({m:lamp,kind:"blink",ph:1})}
   // level 8: a big dish on a pavilion
   if(L_>=8){parts.push("dish");hp(8,"half").add(M4(3.05,base+2.1,0,1.5,1.5,1.5,2.4,-2.2),0x8d7fc0)}
   // level 10: a glowing tip on the tower
@@ -880,10 +894,10 @@ let MONUMENT={plaza:false,pad:false,rocket:false,landed:0};
 function makeRocket(x,py,z){const g=new THREE.Group();g.position.set(x,py,z);
   const body=new THREE.Mesh(new THREE.CylinderGeometry(.42,.48,4.2,10),new THREE.MeshLambertMaterial({color:0xe8e0ff}));body.position.y=2.3;g.add(body);
   const nose=new THREE.Mesh(new THREE.ConeGeometry(.42,1.3,10),new THREE.MeshLambertMaterial({color:0xff3cac}));nose.position.y=5.05;g.add(nose);
-  const band=new THREE.Mesh(new THREE.CylinderGeometry(.44,.44,.18,10),new THREE.MeshBasicMaterial({color:0x2cf4ff}));band.position.y=3.5;g.add(band);
+  const band=new THREE.Mesh(new THREE.CylinderGeometry(.44,.44,.18,10),lit(new THREE.MeshBasicMaterial({color:0x2cf4ff})));band.position.y=3.5;g.add(band);
   const fins=new THREE.Mesh(new THREE.BoxGeometry(1.7,.9,.08),new THREE.MeshLambertMaterial({color:0x6d52cf}));fins.position.y=.65;g.add(fins);
   const fins2=fins.clone();fins2.rotation.y=Math.PI/2;g.add(fins2);
-  const flame=new THREE.Mesh(new THREE.ConeGeometry(.42,2.4,10,1,true),new THREE.MeshBasicMaterial({color:0xffb347,transparent:true,opacity:.9,depthWrite:false,blending:THREE.AdditiveBlending,fog:false}));
+  const flame=new THREE.Mesh(new THREE.ConeGeometry(.42,2.4,10,1,true),lit(new THREE.MeshBasicMaterial({color:0xffb347,transparent:true,opacity:.9,depthWrite:false,blending:THREE.AdditiveBlending,fog:false})));
   flame.rotation.x=Math.PI;flame.position.y=-1.1;flame.visible=false;g.add(flame);city.add(g);
   const smoke=[];for(let i=0;i<6;i++){const m=new THREE.Mesh(G.sphere(),new THREE.MeshLambertMaterial({color:0xb9a4ff,transparent:true,opacity:.5,depthWrite:false}));m.visible=false;city.add(m);smoke.push({m,a:i/6*Math.PI*2})}
   Object.assign(ROCKET,{g,flame,smoke,phase:"idle",t0:0,next:performance.now()+40000})}
@@ -1073,6 +1087,86 @@ function placeLabels(){
   Object.assign(LSTATS,st);
 }
 
+// ---- post-processing (art pass 4): the lights glow, the picture is tone mapped and vignetted. Quality: off, low, high ----
+// Three passes. 1. The scene as before, into a render target. 2. The same scene with every unlit part painted black and
+// only the lights (windows, neon, lamps, beacons, signs) left as they are, at half (high) or quarter (low) resolution,
+// so a wall still hides the glow behind it. 3. That pass blurred and added over the first, then ACES filmic tone mapping
+// and a vignette, drawn to the screen. Status rings, the selection rings, the hazard tape and the board are painted
+// black in pass 2, so they never bloom and keep their colour. Labels are HTML on top of the canvas and are untouched.
+// Off: one pass straight to the screen, as before art pass 4. Remembered per browser (mc-quality).
+const QUALITIES=["off","low","high"],QUALITY_LABEL={off:"✦ GLOW OFF",low:"✦ GLOW LOW",high:"✦ GLOW HIGH"};
+let quality=QUALITIES.includes(store.get("mc-quality"))?store.get("mc-quality"):"high";
+const glowBtn=$("glow");
+function setQuality(q,remember){if(!QUALITIES.includes(q))return;quality=q;glowBtn.textContent=QUALITY_LABEL[q];glowBtn.setAttribute("aria-pressed",q!=="off");if(remember)store.set("mc-quality",q)}
+glowBtn.addEventListener("click",()=>setQuality(QUALITIES[(QUALITIES.indexOf(quality)+2)%3],true));
+setQuality(quality,false);
+const POST={ok:true,w:0,h:0,div:0,main:null,glow:null,blurA:null,blurB:null,wideA:null,wideB:null,cam:new THREE.OrthographicCamera(-1,1,1,-1,0,1),scene:new THREE.Scene(),quad:null,blur:null,comp:null,frames:0,msaa:false,
+  strength:0,swapped:0,blackMats:0,emisMats:0,selfMats:0};
+const BLUR_GLSL=`uniform sampler2D tex;uniform vec2 dir;varying vec2 vUv;
+void main(){vec3 c=texture2D(tex,vUv).rgb*0.2270270270;
+  c+=(texture2D(tex,vUv+dir*1.3846153846).rgb+texture2D(tex,vUv-dir*1.3846153846).rgb)*0.3162162162;
+  c+=(texture2D(tex,vUv+dir*3.2307692308).rgb+texture2D(tex,vUv-dir*3.2307692308).rgb)*0.0702702703;
+  gl_FragColor=vec4(c,1.0);}`;
+const COMP_GLSL=`uniform sampler2D tex;uniform sampler2D glow;uniform sampler2D wide;uniform float strength;uniform float exposure;uniform float sat;uniform float vig;uniform float aspect;varying vec2 vUv;
+vec3 toLin(vec3 c){return pow(max(c,0.0),vec3(2.2));}
+vec3 toSrgb(vec3 c){return pow(max(c,0.0),vec3(1.0/2.2));}
+float fit(float v){float a=v*(v+0.0245786)-0.000090537;float b=v*(0.983729*v+0.4329510)+0.238081;return a/b;}
+// hue-preserving filmic curve: the ACES fit applied to the brightest channel and the colour scaled by it, so a saturated
+// light compresses toward its own colour, never toward white, and the status colours keep their hue
+vec3 filmic(vec3 c){float m=max(c.r,max(c.g,c.b));if(m<=0.0)return c;float t=clamp(fit(m*exposure/0.6)*1.0,0.0,1.0);return c*(t/m);}
+void main(){vec4 s=texture2D(tex,vUv);vec3 g=texture2D(glow,vUv).rgb*0.55+texture2D(wide,vUv).rgb;
+  vec3 c=toLin(s.rgb)+toLin(g)*strength;
+  c=toSrgb(filmic(c));
+  float l=dot(c,vec3(0.2126,0.7152,0.0722));c=mix(vec3(l),c,sat);
+  float d=length((vUv-0.5)*vec2(aspect,1.0))*2.0;c*=1.0-vig*smoothstep(0.6,1.6,d);
+  gl_FragColor=vec4(c,max(s.a,min(1.0,dot(g,vec3(1.0))*strength)));}`;
+const VERT_GLSL=`varying vec2 vUv;void main(){vUv=uv;gl_Position=vec4(position.xy,0.0,1.0);}`;
+function postInit(){const rtOpt={minFilter:THREE.LinearFilter,magFilter:THREE.LinearFilter,format:THREE.RGBAFormat,depthBuffer:true,stencilBuffer:false};
+  POST.blur=new THREE.ShaderMaterial({uniforms:{tex:{value:null},dir:{value:new THREE.Vector2()}},vertexShader:VERT_GLSL,fragmentShader:BLUR_GLSL,depthTest:false,depthWrite:false});
+  POST.comp=new THREE.ShaderMaterial({uniforms:{tex:{value:null},glow:{value:null},wide:{value:null},strength:{value:1},exposure:{value:1.25},sat:{value:1.0},vig:{value:.3},aspect:{value:1}},vertexShader:VERT_GLSL,fragmentShader:COMP_GLSL,depthTest:false,depthWrite:false,transparent:true});
+  POST.quad=new THREE.Mesh(new THREE.PlaneGeometry(2,2),POST.comp);POST.quad.frustumCulled=false;POST.scene.add(POST.quad);POST.rtOpt=rtOpt}
+function postSize(){const v=renderer.getDrawingBufferSize(new THREE.Vector2()),div=quality==="low"?4:2,w=Math.max(2,v.x|0),h=Math.max(2,v.y|0);
+  if(POST.w===w&&POST.h===h&&POST.div===div)return;
+  ["main","glow","blurA","blurB","wideA","wideB"].forEach(k=>{if(POST[k]){POST[k].dispose();POST[k]=null}});
+  POST.w=w;POST.h=h;POST.div=div;const o=POST.rtOpt;
+  const msaa=renderer.capabilities.isWebGL2&&typeof THREE.WebGLMultisampleRenderTarget==="function";POST.msaa=msaa;
+  POST.main=msaa?new THREE.WebGLMultisampleRenderTarget(w,h,o):new THREE.WebGLRenderTarget(w,h,o);if(msaa)POST.main.samples=4;
+  const gw=Math.max(2,Math.round(w/div)),gh=Math.max(2,Math.round(h/div)),bo=Object.assign({},o,{depthBuffer:false});
+  POST.glow=new THREE.WebGLRenderTarget(gw,gh,o);POST.blurA=new THREE.WebGLRenderTarget(gw,gh,bo);POST.blurB=new THREE.WebGLRenderTarget(gw,gh,bo);POST.gw=gw;POST.gh=gh;
+  const ww=Math.max(2,Math.round(gw/2)),wh=Math.max(2,Math.round(gh/2));POST.wideA=new THREE.WebGLRenderTarget(ww,wh,bo);POST.wideB=new THREE.WebGLRenderTarget(ww,wh,bo);POST.ww=ww;POST.wh=wh}
+// The glow pass material for a scene material. "self": a light, drawn as it is. A facade (lit windows): its emissive map
+// alone, no wall colour. Anything else: black, keeping the map, alpha test, blending and the shell shader so it still
+// hides what is behind it exactly as the real material does.
+function glowOf(m){if(!m||m.userData.glow==="self")return m;let g=m.userData.glowMat;if(g)return g;
+  const copyShader=()=>{if(m.onBeforeCompile!==THREE.Material.prototype.onBeforeCompile){g.onBeforeCompile=m.onBeforeCompile;g.customProgramCacheKey=m.customProgramCacheKey}};
+  if(m.emissiveMap&&m.emissiveIntensity>0&&m.userData.glow!=="black"){g=new THREE.MeshBasicMaterial({map:m.emissiveMap,color:m.emissive.clone().multiplyScalar(m.emissiveIntensity),side:m.side});
+    const base=m.onBeforeCompile,key=m.customProgramCacheKey;g.onBeforeCompile=sh=>{base(sh);sh.vertexShader=sh.vertexShader.replace("vColor.xyz *= instanceColor.xyz;","")};g.customProgramCacheKey=()=>"glow"+key();POST.emisMats++}
+  else{g=new THREE.MeshBasicMaterial({color:0x000000,map:m.map||null,alphaTest:m.alphaTest||0,transparent:!!m.transparent,opacity:m.opacity,side:m.side,blending:m.blending,depthWrite:m.depthWrite,depthTest:m.depthTest,
+      polygonOffset:m.polygonOffset,polygonOffsetFactor:m.polygonOffsetFactor,polygonOffsetUnits:m.polygonOffsetUnits});copyShader();POST.blackMats++}
+  g.visible=m.visible;g.fog=false;g.userData.glowFor=m;m.userData.glowMat=g;return g}
+const GLOW_SWAP=[];
+function glowSwap(){GLOW_SWAP.length=0;scene.traverse(o=>{if(!o.material||!o.isMesh)return;const m=o.material,g=glowOf(m);if(g===m)return;GLOW_SWAP.push(o,m);o.material=g});POST.swapped=GLOW_SWAP.length/2}
+function glowRestore(){for(let i=0;i<GLOW_SWAP.length;i+=2)GLOW_SWAP[i].material=GLOW_SWAP[i+1];GLOW_SWAP.length=0}
+function blurPass(src,dst,dx,dy){POST.blur.uniforms.tex.value=src.texture;POST.blur.uniforms.dir.value.set(dx/dst.width,dy/dst.height);POST.quad.material=POST.blur;renderer.setRenderTarget(dst);renderer.render(POST.scene,POST.cam)}
+// draws one frame: straight to the screen when the glow is off, else through the three passes. `target` is for the tests
+function drawFrame(target){
+  if(quality==="off"||!POST.ok){renderer.setRenderTarget(target||null);renderer.render(scene,camera);POST.strength=0;return}
+  try{if(!POST.quad)postInit();postSize();
+    renderer.setRenderTarget(POST.main);renderer.render(scene,camera);
+    glowSwap();renderer.setRenderTarget(POST.glow);renderer.render(scene,camera);glowRestore();
+    // two levels of blur: a tight halo at the glow size and a wide one at half that again (the wide one carries most of the look)
+    blurPass(POST.glow,POST.blurA,1,0);blurPass(POST.blurA,POST.blurB,0,1);
+    blurPass(POST.blurB,POST.wideA,1,0);blurPass(POST.wideA,POST.wideB,0,1);
+    if(quality==="high"){blurPass(POST.wideB,POST.wideA,2,0);blurPass(POST.wideA,POST.wideB,0,2)}
+    POST.strength=BLOOM_K*1.6;
+    const u=POST.comp.uniforms;u.tex.value=POST.main.texture;u.glow.value=POST.blurB.texture;u.wide.value=POST.wideB.texture;u.strength.value=POST.strength;u.aspect.value=POST.w/POST.h;
+    POST.quad.material=POST.comp;renderer.setRenderTarget(target||null);renderer.render(POST.scene,POST.cam);POST.frames++}
+  catch(e){glowRestore();POST.ok=false;POST.error=String(e&&e.message||e);renderer.setRenderTarget(target||null);renderer.render(scene,camera)}}
+// reads back a drawn frame for the tests: the colour under each screen point (x, y in 0..1, y up), with the full pipeline on
+function samplePixels(points){const v=renderer.getDrawingBufferSize(new THREE.Vector2()),rt=new THREE.WebGLRenderTarget(v.x,v.y,{minFilter:THREE.LinearFilter,magFilter:THREE.LinearFilter,format:THREE.RGBAFormat});
+  drawFrame(rt);const px=new Uint8Array(4);const out=points.map(([x,y])=>{const sx=Math.max(0,Math.min(v.x-1,Math.round(x*v.x))),sy=Math.max(0,Math.min(v.y-1,Math.round(y*v.y)));renderer.readRenderTargetPixels(rt,sx,sy,1,1,px);return[px[0],px[1],px[2]]});
+  renderer.setRenderTarget(null);rt.dispose();return out}
+
 // add #fps to the page address for a frame-rate readout (for checking the laptop)
 const PERF={calls:0,tris:0,n:0,at:0};let fpsEl=null;
 function fpsCheck(){const on=/fps/i.test(location.hash);if(on&&!fpsEl){fpsEl=document.createElement("div");fpsEl.className="fps";host.appendChild(fpsEl)}else if(!on&&fpsEl){fpsEl.remove();fpsEl=null}}
@@ -1131,8 +1225,9 @@ function frame(now){const dt=Math.min(.05,(now-last)/1000||0);last=now;const t=n
     if(spotOn){const R=sb.ringR+.7,Hs=SPOT_H;FX.spot.position.set(sb.pos.x,0,sb.pos.z);FX.spot.scale.set(R,Hs,R);FX.spot.material.opacity=reduce?.5:.42+.08*Math.sin(t*2);
       FX.pool.position.set(sb.pos.x,.26,sb.pos.z);FX.pool.scale.set(R,1,R)}}
   poolList.forEach(p=>p.flush());
-  renderer.render(scene,camera);PERF.calls=renderer.info.render.calls;PERF.tris=renderer.info.render.triangles;PERF.n++;
-  if(fpsEl&&now-PERF.at>=500){fpsEl.textContent=`FPS ${Math.round(PERF.n*1000/(now-PERF.at))} · ${PERF.calls} DRAW CALLS · ${Math.round(PERF.tris/1000)}K TRIANGLES`;PERF.n=0;PERF.at=now}
+  // draw calls and triangles are counted over every pass (the glow pass draws the city a second time at low resolution)
+  renderer.info.reset();drawFrame(null);PERF.calls=renderer.info.render.calls;PERF.tris=renderer.info.render.triangles;PERF.n++;
+  if(fpsEl&&now-PERF.at>=500){fpsEl.textContent=`FPS ${Math.round(PERF.n*1000/(now-PERF.at))} · ${PERF.calls} DRAW CALLS · ${Math.round(PERF.tris/1000)}K TRIANGLES · GLOW ${quality.toUpperCase()}`;PERF.n=0;PERF.at=now}
   if(now-scrollAt<150)RSTATS.labelSkips++;else placeLabels();
   requestAnimationFrame(frame)}
 FX.flashAt=-1e9;
@@ -1214,13 +1309,16 @@ async function boot(){
   if(st==="granted")await refresh(false);
   else{mode="needs-permission";setButtons();snapLabel("CLICK ALLOW VAULT ACCESS TO GO LIVE");renderSince("CLICK ALLOW VAULT ACCESS TO SEE WHAT CHANGED SINCE YOUR LAST VISIT.")}
 }
-window.MC={render,refresh:()=>refresh(true),launch:()=>{ROCKET.next=0},dropModel:n=>{if(HERO.geo[n]){delete HERO.geo[n];HERO.failed.push(n);return true}return false},
+window.MC={render,refresh:()=>refresh(true),launch:()=>{ROCKET.next=0},setQuality:q=>setQuality(q,true),sample:samplePixels,
+  project:(x,y,z)=>{const v=_v.set(x,y,z).project(camera);return[(v.x+1)/2,(v.y+1)/2]},dropModel:n=>{if(HERO.geo[n]){delete HERO.geo[n];HERO.failed.push(n);return true}return false},
   plan:(n,lv,withLm)=>{const p=planLots(n,lv,withLm?landmarkPlan(PROJECTS.slice().sort(byStart)):null);return{blocks:p.blocks,ring:p.R,order:[...new Set(p.lots.map(l=>l.i+","+l.j))],lots:p.lots.filter(l=>!l.square&&!l.landmark).slice(0,n).map(l=>l.x+","+l.z),landmarks:[...new Set(p.lots.filter(l=>l.landmark).map(l=>l.landmark+"@"+l.block))]}},look:(id,r,a)=>{const b=buildings.find(x=>x.p.id===id);if(!b)return false;setSpin(false);if(a!==undefined)az=a;rad=r||30;tgtGoal=null;tgt.set(b.pos.x,Math.min(8,b.topY*.4+1),b.pos.z);return true},view:(a,p,r)=>{az=a;rad=r;setSpin(false);tgtGoal=null;tgt.set(0,4,0)},state:()=>({mode,lastRefresh,projects:PROJECTS,warnings:WARNINGS,level:LEVEL,stats:STATS,buildings:buildings.length,
   towers:buildings.map(b=>({id:b.p.id,floors:b.N,shown:b.shown,lane:b.p.lane,crown:b.crownSlots.length>0,kind:b.p.kind,roof:b.shown>=b.N,height:+(b.topY).toFixed(2),stale:b.stale,
     lights:b.mode,holoFull:b.holoFull,ringWide:!!b.ringSlot,net:b.floors.reduce((n,f)=>n+(f.net.length&&f.net[0][0].list[f.net[0][1]].on?1:0),0),
     tarp:b.floors.some(f=>f.tarp.length>0&&f.tarp[0][0].list[f.tarp[0][1]].on),x:+b.pos.x.toFixed(2),z:+b.pos.z.toFixed(2),lot:b.lot.rank,ring:b.lot.ring,created:b.p.created,kit:b.kit.hash,foot:b.kit.foot,
     stage:b.floors.reduce((o,f,i)=>{const st=stageOf(b,i,b.shown);o[st]=(o[st]||0)+1;return o},{}),crane:!!b.crane,craneOn:!!(b.crane&&b.crane.on),craneTurns:!!(b.crane&&b.crane.on&&b.p.lane==="ready"&&!b.stale&&!reduce),rust:b.stale>60,fence:b.tog.fence.length>0,props:b.tog.props.some(([P,i])=>P.list[i].on),trees:b.tog.trees.some(([P,i])=>P.list[i].on),
-    status:{ring:C[b.p.lane],beacon:"#"+b.beacon[0].list[b.beacon[1]].c.getHexString()}})),
+    status:{ring:C[b.p.lane],beacon:"#"+b.beacon[0].list[b.beacon[1]].c.getHexString()},ringR:+b.ringR.toFixed(2)})),
+  post:{quality,on:quality!=="off"&&POST.ok,ok:POST.ok,error:POST.error||null,strength:+POST.strength.toFixed(3),frames:POST.frames,size:POST.main?[POST.w,POST.h]:null,glowSize:POST.glow?[POST.gw,POST.gh]:null,div:POST.div,msaa:POST.msaa,swapped:POST.swapped,emisMats:POST.emisMats,blackMats:POST.blackMats,btn:glowBtn.textContent},
+  prog:{...CITY_K},walls:WALLS.map(w=>w[0]),litIntensity:(()=>{let m=0;poolList.forEach(P=>{if(P.mat.emissiveMap&&P.mat.userData.mode==="lit")m=Math.max(m,P.mat.emissiveIntensity)});return +m.toFixed(3)})(),
   street:{...STREET},camera:{ortho:!!camera.isOrthographicCamera,elevation:+(90-ISO*180/Math.PI).toFixed(2),az,rad,fit:fitR},blocks:BLOCKS,sceneSun:(()=>{let n=0;scene.traverse(o=>{if(o.isSprite)n++});return n>0})(),pools:poolList.length,
   unlocks:unlockGroups.map((g,lv)=>g?lv:0).filter(Boolean),hq:{floors:HQ.floors,tower:HQ.tower,boardW:HQ.boardW,parts:HQ.parts.slice(),board:HQ.boardText,boardFacesCamera:!!HQ.board&&HQ.board.quaternion.angleTo(camera.quaternion)<1e-3},
   monuments:{...MONUMENT},landmarks:Object.fromEntries(Object.entries(LANDMARK_STATE).map(([k,v])=>[k,{on:v.on,model:v.model,hero:v.hero,x:v.x,z:v.z,block:v.block,ring:v.ring,height:v.height,w:v.w,name:v.name,date:v.date,n0:v.n0,first:v.first,rise:v.group?+v.group.scale.y.toFixed(2):null}])),

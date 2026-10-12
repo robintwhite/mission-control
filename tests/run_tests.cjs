@@ -19,7 +19,9 @@
  * 4. Art pass 2a (O to Q): placement by start date, stages, status, the kit, the camera, the street.
  * 5. Art pass 2b (R): the city grows by blocks with the level, roads by tier, traffic by activity, HQ and its board,
  *    monuments by projects landed, lights only on landed buildings, the gold ring, faint blueprints, the spotlight,
- *    the blue title, no drawing while the city is scrolled away, and the budgets on a very big city. */
+ *    the blue title, no drawing while the city is scrolled away, and the budgets on a very big city.
+ * 6. Art pass 4 (T): the GLOW quality switch (off, low, high) and its memory, the three-pass pipeline, the darker walls,
+ *    the city that brightens with its level, and the five status rings keeping their colours with the glow on. */
 const fs = require("fs"), path = require("path"), os = require("os"), { execFileSync } = require("child_process");
 const { makeVault } = require("./fake-vault.js");
 const P = require("../template/vault-parser.js");
@@ -634,11 +636,17 @@ async function main() {
       for (let k = 0; k < 61; k++) { const q = JSON.parse(JSON.stringify(base[k % base.length])); q.id = "b" + k; q.code = "B" + k; q.size = "XL"; q.floors = 24; q.created = "2027-01-" + String(1 + k % 28).padStart(2, "0"); q.lane = "landed"; q.progress = 100; q.lit = 24; ps.push(q); }
       MC.render({ projects: ps, warnings: [] }); MC.view(Math.PI / 4, 1, 200); return null; });
     await pg.waitForTimeout(800);
+    // the scene budget is measured with the glow off (art pass 4 draws the city a second time for the glow pass); the glow-on
+    // count is checked under section T
+    await pg.evaluate(() => MC.setQuality("off")); await pg.waitForTimeout(300);
     const sb = await pg.evaluate(() => MC.state());
     // art pass 3: the hero pieces (five landmarks at about 2,000 triangles, 5 train cars at 900, 10 hover cars at 600) add about
     // 20K to this stress city, which was 144K in 2b. The 150K line holds for the real city (33K today) and up to roughly 50 landed XL
     // projects; this case is checked against 175K. See the vault note, art pass 3 status.
     ok(sb.level > 60 && sb.perf.calls < 600 && sb.perf.tris < 175000 && sb.street.onRoad && sb.beyond === 0, `R. a very big city (61 XL landed, level ${sb.level}, ${sb.street.blocks} blocks): ${sb.perf.calls} draw calls, ${Math.round(sb.perf.tris / 1000)}K triangles (under 175K; the 150K line is for the real city)`);
+    await pg.evaluate(() => MC.setQuality("high")); await pg.waitForTimeout(400);
+    const sbh = await pg.evaluate(() => MC.state());
+    ok(sbh.post.on && sbh.perf.calls < 600 && sbh.perf.tris < 2 * sb.perf.tris + 2000, `T. the same big city with the glow on high: ${sbh.perf.calls} draw calls (under 600), ${Math.round(sbh.perf.tris / 1000)}K triangles over both passes`);
     await pg.screenshot({ path: path.join(OUT, "big-city.png") });
     await ctx.close();
   }
@@ -733,6 +741,91 @@ async function main() {
     ok(risen > 0.95, `S. the ${s.lm.name.toLowerCase()} has risen in (scale ${risen})`);
     await pg.evaluate(() => MC.view(Math.PI / 4, 1, 60)); await pg.waitForTimeout(300);
     await pg.screenshot({ path: path.join(OUT, "landmark-unlock.png") });
+    await ctx.close();
+  }
+  // T. art pass 4: post-processing (filmic tone mapping, bloom on the lights only, a vignette) behind a quality switch that is
+  // remembered per browser; the darker wall palette; the city that brightens with its level; status rings kept out of the glow
+  {
+    const { ctx, pg } = await open(page);
+    const post = () => pg.evaluate(() => { const s = MC.state(); return { post: s.post, perf: s.perf, prog: s.prog, level: s.level, walls: s.walls, lit: s.litIntensity }; });
+    let s = await post();
+    const btns = await pg.evaluate(() => [...document.querySelectorAll(".city .ctl button")].map(b => b.id + ":" + b.textContent));
+    ok(btns.join(" ") === "snd:♪ SOUND ON spin:■ SPIN OFF glow:✦ GLOW HIGH", `T. the GLOW button sits with SOUND and SPIN and starts on HIGH: ${btns.join(" · ")}`);
+    const W = s.post.size, G = s.post.glowSize;
+    ok(s.post.on && s.post.ok && !s.post.error && s.post.div === 2 && W && G && Math.abs(G[0] - W[0] / 2) <= 1 && Math.abs(G[1] - W[1] / 2) <= 1 && s.post.frames > 0, `T. HIGH: three passes, the glow at half resolution (${W.join("x")} → ${G.join("x")}), ${s.post.msaa ? "MSAA on the main pass" : "no MSAA"}, ${s.post.frames} frames so far`);
+    ok(s.post.emisMats > 0 && s.post.blackMats > 0 && s.post.swapped > 50, `T. the glow pass swaps materials: ${s.post.emisMats} lit facades drawn by their windows alone, ${s.post.blackMats} kinds of part painted black, ${s.post.swapped} meshes swapped per frame`);
+    const high = s.perf;
+    ok(high.calls < 600 && high.tris < 150000, `T. HIGH budget on today's city: ${high.calls} draw calls and ${Math.round(high.tris / 1000)}K triangles over both passes (under 600 and 150K)`);
+    await pg.click("#glow"); await pg.waitForTimeout(400); s = await post();
+    ok(s.post.quality === "low" && s.post.div === 4 && s.post.btn === "✦ GLOW LOW" && Math.abs(s.post.glowSize[0] - W[0] / 4) <= 1, `T. one click: LOW, the glow at quarter resolution (${s.post.glowSize.join("x")})`);
+    await pg.click("#glow"); await pg.waitForTimeout(400); s = await post();
+    const off = s.perf;
+    ok(s.post.quality === "off" && !s.post.on && s.post.btn === "✦ GLOW OFF" && (await pg.getAttribute("#glow", "aria-pressed")) === "false" && s.post.strength === 0, "T. two clicks: OFF, one pass straight to the screen, no glow");
+    ok(off.calls < high.calls && off.tris < high.tris && high.calls < 2 * off.calls + 20, `T. OFF draws once: ${off.calls} draw calls and ${Math.round(off.tris / 1000)}K triangles (HIGH: ${high.calls} and ${Math.round(high.tris / 1000)}K)`);
+    await pg.click("#glow"); await pg.waitForTimeout(300); s = await post();
+    ok(s.post.quality === "high" && s.post.on, "T. three clicks: back to HIGH");
+    await pg.evaluate(() => MC.setQuality("low")); await pg.reload(); await pg.waitForFunction(() => window.MC && MC.state().towers.length > 0); await pg.waitForTimeout(400); s = await post();
+    ok(s.post.quality === "low" && (await pg.textContent("#glow")) === "✦ GLOW LOW", `T. the setting survives a reload: "${await pg.textContent("#glow")}"`);
+    await pg.evaluate(() => MC.setQuality("high")); await pg.waitForTimeout(300);
+    // the fps readout names the quality
+    await pg.evaluate(() => { location.hash = "#fps"; }); await pg.waitForTimeout(900);
+    ok(/GLOW HIGH/.test(await pg.textContent(".fps")), `T. the #fps readout names the quality: "${await pg.textContent(".fps")}"`);
+    await pg.evaluate(() => { location.hash = ""; });
+    // the darker palette: every wall is dark (no channel above 0x4b), the landmark colours are untouched
+    const lm = await pg.evaluate(() => MC.state().landmarks);
+    ok(s.walls.length === 6 && s.walls.every(w => ((w >> 16) & 255) <= 0x50 && ((w >> 8) & 255) <= 0x50 && (w & 255) <= 0x50), `T. the six wall colours are dark and grey (no channel above 0x50): ${s.walls.map(w => "#" + w.toString(16).padStart(6, "0")).join(", ")}`);
+    ok(lm.making && lm.making.on && lm.making.hero, "T. the factory still stands in its own colours (landmarks, the train and the hover cars are not in the wall palette)");
+    // progression: level 1 dark and glow-free, today in between, level 10 full
+    const L6 = s;
+    ok(L6.level === 6 && L6.prog.k > 0.5 && L6.prog.k < 0.6 && L6.post.strength > 0.5 && L6.post.strength < 1.6 && L6.lit > 0.7 && L6.lit < 1, `T. today's level ${L6.level} city sits between dark and full neon: windows at ${L6.lit}, neon at ${L6.prog.neon}, glow strength ${L6.post.strength}`);
+    const atLevel = lv => pg.evaluate(async lv => { const base = JSON.parse(JSON.stringify(MC.state().projects)); const ps = []; let xp = 0, k = 0;
+      if (lv === 1) { const q = JSON.parse(JSON.stringify(base[0])); q.lane = "ready"; q.progress = 10; q.lit = 1; ps.push(q); }
+      else while (xp < (lv - 1) * 30 + 1) { const q = JSON.parse(JSON.stringify(base[k % base.length])); q.id = "L" + k; q.code = "L" + k; q.lane = "landed"; q.progress = 100; q.size = "XL"; q.floors = 24; q.lit = 24; q.created = "2026-01-" + String(1 + k % 28).padStart(2, "0"); ps.push(q); xp += 48; k++; }
+      MC.render({ projects: ps, warnings: [] }); await new Promise(r => setTimeout(r, 700)); const st = MC.state(); return { level: st.level, prog: st.prog, post: st.post, lit: st.litIntensity, perf: st.perf }; }, lv);
+    const L1 = await atLevel(1);
+    ok(L1.level === 1 && L1.prog.k === 0 && L1.prog.bloom === 0 && L1.post.strength === 0 && L1.post.on && L1.lit > 0.4 && L1.lit < 0.45 && L1.prog.neon === 0.5 && L1.prog.boards === 0.2, `T. level 1: dim windows (${L1.lit}), neon at half, no glow even on HIGH (strength ${L1.post.strength}), few signs`);
+    await pg.screenshot({ path: path.join(OUT, "level1-dark.png") });
+    const L10 = await atLevel(10);
+    ok(L10.level === 10 && L10.prog.k === 1 && L10.post.strength >= 1.5 && L10.lit === 1 && L10.prog.neon === 1 && L10.prog.boards === 0.5, `T. level 10: full neon (windows ${L10.lit}, neon ${L10.prog.neon}), glow at full strength (${L10.post.strength}), billboards on half the roofs`);
+    ok(L10.perf.calls < 600 && L10.perf.tris < 150000, `T. level 10 on HIGH stays in budget: ${L10.perf.calls} draw calls, ${Math.round(L10.perf.tris / 1000)}K triangles`);
+    await pg.evaluate(() => MC.view(Math.PI / 4, 0, 60)); await pg.waitForTimeout(300);
+    await pg.screenshot({ path: path.join(OUT, "level10-glow.png") });
+    // the glow adds light: the same frame is brighter on HIGH than OFF, and the extra light is where the lights are
+    const bright = await pg.evaluate(() => { const pts = []; for (let x = .3; x <= .7; x += .05) for (let y = .3; y <= .7; y += .05) pts.push([x, y]);
+      const mean = px => px.reduce((a, c) => a + c[0] + c[1] + c[2], 0) / (3 * px.length); MC.setQuality("high"); const h = mean(MC.sample(pts)); MC.setQuality("off"); const o = mean(MC.sample(pts)); MC.setQuality("high"); return { h: +h.toFixed(1), o: +o.toFixed(1) }; });
+    ok(bright.h > bright.o, `T. the glow adds light over the city: mean brightness ${bright.h} on HIGH, ${bright.o} on OFF`);
+    await ctx.close();
+  }
+  // T. the five status rings still name their lanes with the glow on high. The rings are painted black in the glow pass, so
+  // they never bloom, and the filmic curve keeps each hue. Each ring is sampled on its own lot from the street side (a
+  // neighbour in front would hide it from the isometric camera), on OFF and on HIGH, and the five are compared side by side
+  {
+    const { ctx, pg } = await open(page);
+    const r = await pg.evaluate(async () => {
+      const base = JSON.parse(JSON.stringify(MC.state().projects)), lanes = ["ready", "waiting", "blocked", "parked", "landed"], out = {};
+      for (const lane of lanes) { const q = JSON.parse(JSON.stringify(base[0])); q.id = "ring"; q.code = "RNG"; q.name = "Ring"; q.lane = lane; q.size = "S"; q.floors = 6; q.kind = "software"; q.created = "2026-05-05"; q.progress = lane === "landed" ? 100 : 5; q.lit = lane === "landed" ? 6 : 0; q.stale = 0; q.wait = "";
+        MC.render({ projects: [q], warnings: [] }); dispatchEvent(new KeyboardEvent("keydown", { key: "Escape" })); await new Promise(r => setTimeout(r, 200));
+        const t = MC.state().towers[0], az = Math.PI; MC.look("ring", 24, az); await new Promise(r => setTimeout(r, 300)); out[lane] = { lot: t.lot };
+        for (const qq of ["off", "high"]) { MC.setQuality(qq); const pts = [];
+          for (const rr of [.88, .91, .94, .97]) for (const da of [-.2, 0, .2]) { const a = az + da; pts.push(MC.project(t.x + Math.sin(a) * t.ringR * rr, .2, t.z + Math.cos(a) * t.ringR * rr)); }
+          let best = null; MC.sample(pts).forEach(c => { const sat = Math.max(...c) - Math.min(...c); if (!best || sat > best.sat) best = { c, sat }; }); out[lane][qq] = best.c; } }
+      MC.setQuality("high"); return out;
+    });
+    const want = { ready: [44, 244, 255], waiting: [255, 179, 71], blocked: [255, 77, 109], parked: [127, 143, 179], landed: [93, 255, 176] };
+    const hue = c => Math.atan2(Math.sqrt(3) * (c[1] - c[2]), 2 * c[0] - c[1] - c[2]);
+    const dHue = (a, b) => Math.abs(((hue(a) - hue(b) + Math.PI * 3) % (Math.PI * 2)) - Math.PI);
+    const nearest = c => Object.entries(want).map(([l, w]) => [l, dHue(c, w)]).sort((a, b) => a[1] - b[1])[0][0];
+    const dist = (a, b) => Math.hypot(a[0] - b[0], a[1] - b[1], a[2] - b[2]);
+    for (const q of ["off", "high"]) {
+      const got = Object.keys(want).map(l => [l, r[l][q]]);
+      const named = got.every(([l, c]) => nearest(c) === l);
+      let minD = 1e9; for (let i = 0; i < got.length; i++) for (let j = i + 1; j < got.length; j++) minD = Math.min(minD, dist(got[i][1], got[j][1]));
+      ok(named && minD > 40, `T. five rings on ${q.toUpperCase()}: each names its lane (${got.map(([l, c]) => l + " rgb(" + c.join(",") + ")").join(", ")}), closest pair ${Math.round(minD)} apart`);
+    }
+    const drift = Object.keys(want).map(l => [l, dist(r[l].off, r[l].high), dHue(r[l].off, r[l].high)]);
+    ok(drift.every(([, d, h]) => d < 70 && h < 0.35), `T. HIGH keeps each ring's colour: ${drift.map(([l, d, h]) => l + " " + Math.round(d) + " apart, hue " + (h * 180 / Math.PI).toFixed(0) + "°").join(", ")}`);
+    await pg.waitForTimeout(200);
+    await pg.screenshot({ path: path.join(OUT, "ring-high.png"), clip: { x: 300, y: 300, width: 800, height: 500 } });
     await ctx.close();
   }
   // R. no 3D drawing while the city is scrolled out of view
