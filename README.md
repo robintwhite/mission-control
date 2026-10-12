@@ -1,6 +1,6 @@
 # Mission Control
 
-One neon city screen showing every project in Robin's personal vault: what it is building, its state, the next step, what it is waiting on, and how far along it is. Finished projects form the downtown core; the city levels up as floors get built.
+One neon city screen showing every project in Robin's personal vault: what it is building, its state, the next step, what it is waiting on, and how far along it is. It is an isometric, low-poly city builder. Each project is a building on its own lot, placed by start date: the oldest round the town square, newer ones outward block by block. A building never moves; it rises floor by floor as progress goes up, and the city levels up as floors get built.
 
 The vault note for this project: `Projects/Mission Control Dashboard/Mission Control Dashboard.md`.
 
@@ -44,9 +44,13 @@ kind: hardware            # software | making | hardware | career | athletics. S
 size: XL                  # S | M | L | XL. Sets the building height: 6, 10, 16, 24 floors
 next: "The next concrete step."
 waiting_on: ""            # what Robin has to do or what is blocking; empty when nothing
+created: 2026-10-04       # start date. Places the building (oldest at the centre). Set once, never change it
+updated: 2026-10-11       # last real progress. Drives stale (dim at 30 days, rust at 60)
 ```
 
-Also used if present: `status`, `completed`, `updated`, `created`, `project` (slug), `area`.
+Also used if present: `status`, `completed`, `project` (slug), `area`.
+
+Only the one note per project with `type: project` is read. The other notes in the project folder are ignored, even if they have `created` or `updated` lines. The detail panel shows that note's path.
 
 Rules (the same in `build.py` and `template/vault-parser.js`):
 - `status: completed` (or `complete`) forces `lane: landed` and `progress: 100`. `status: parked` forces `lane: parked`.
@@ -56,6 +60,7 @@ Rules (the same in `build.py` and `template/vault-parser.js`):
 - `size` sets the floors: S 6, M 10, L 16, XL 24. Lit floors = `progress` % of those, rounded half up (50% of S = 3, 25% of S = 2). Both parsers add `floors` and `lit` to each project, with integer maths so they agree exactly.
 - `kind` sets the building shape (see City rules). A missing or invalid `kind` or `size` is a warning (size falls back to M; a missing kind draws as software).
 - An empty `northstar` or `next` on a project that has not landed is a warning.
+- `created` must be a real `YYYY-MM-DD` date. Missing or not a date is a warning, and the building goes on the outer edge after every dated one.
 - `name` falls back to the note's `# ` heading (leading emoji, "Project " and " MOC" removed), then the file name. `code` falls back to the first three letters of the name.
 
 ## Running it
@@ -76,22 +81,25 @@ Needs Node 18+ and Playwright with its Chromium (dev only). Writes to `tests/out
 1. Parity: `build.py --dump` and `vault-parser.js` give identical projects and warnings, in the same order, on the real vault and on a generated edge-case vault (BOM, CRLF, bad lanes, bad dates, lists, odd file names, invalid UTF-8).
 2. In headless Chromium, on the page opened from `file://`: the snapshot fallback; Connect vault with the picker stubbed by a fake folder, and parity again in the browser; Refresh after an edit and a new note, with no reload; the warnings panel; a folder that is not the vault; a stored folder that needs one Allow click; a stored folder already allowed; IndexedDB on `file://`; a real folder handle kept in IndexedDB across a reload (over `http://127.0.0.1`, since the origin private file system is blocked on `file://`); the mirror build; a browser without folder access; no console errors.
 
-3. City (added in v0.2 steps 2 and 3): heights from size and lit floors from progress for every building; size-weighted XP and level, the same in Python and JS; first visit; "since your last visit" with a seeded record (strip text, floors lighting one by one, the landing moment, selection, clicking a strip item, a reload in the same sitting, the next visit); the sound toggle and its memory; a project landing on Refresh (crown, XP, sting, level-up toast); no label over another label or the HUD from six camera angles and at phone width; reduced motion; floor height and roof by kind; the tarp and rust; each level's unlocks drawn, up to 10, and rising in on a level up; the draw-call budget; fonts built in; the `#fps` readout.
+3. City (added in v0.2 steps 2 and 3, and art pass 2a): heights from size and lit floors from progress for every building; size-weighted XP and level, the same in Python and JS; first visit; "since your last visit" with a seeded record (strip text, floors lighting one by one, the landing moment, selection, clicking a strip item, a reload in the same sitting, the next visit); the sound toggle and its memory; a project landing on Refresh (crown, XP, sting, level-up toast); no label over another label or the HUD from six camera angles and at phone width; reduced motion; floor height and roof by kind; the tarp and rust; each level's unlocks drawn, up to 10, and rising in on a level up; the draw-call budget; fonts built in; the `#fps` readout. Art pass 2a (sections O, P, Q): lots in start-date order round a free town square, same-date projects side by side, no building moves on a progress change, a landing, parking or a new project; the build front (scaffold, frame, blueprint) on every site; cranes; status ring colours; landed sites cleared with trees; the kit varies and is seeded; zoned, parked, blocked, stale and topped-out stages; the isometric camera and drag; the sun only in the banner; street level; 600 draw calls and 150K triangles; undated notes on the outer edge.
 
 The folder picker itself, Chrome's permission prompt and whether sound is heard cannot be automated. Those need a person: see the vault note §9.
 
 ## City rules (in the template)
 
-- Downtown core: landed. Inner ring: ready. Outer ring: waiting on me. Far corners: blocked.
+- **Placement (art pass 2a).** Projects sorted by `created`, then name, then note path, take the lots in order. The centre block is the town square and stays free (Mission Control HQ goes there in art pass 2b). Lots go out block by block, four per block, ring by ring round the square. Status, progress and landing never move a building.
+- Same start date: those projects take neighbouring lots, in name order. A new project with an older `created` than others slots in among them and moves the later ones one lot along. Give a new project today's date and nothing moves. A new project with the same date as one made the same day can sort before it by name; that moves the other one lot, once.
+- The next three free lots stay zoned for the next projects. The rest of the city lots fill with infill by level, seeded per lot, so they never reshuffle.
+- The grid is 5 by 5 blocks while the projects fit in the first ring (32 lots). Past that it grows by a ring.
+- **Construction stages (from `progress`, floor by floor).** 0%: a fenced, zoned lot with a hologram blueprint of the whole building and a site board with the code. Above 0%: a foundation; lit floors are clad, with windows; the next two floors are scaffold and green net; the two above that a steel frame; the rest stays a hologram blueprint in the status colour. Ready and waiting sites have a crane (turning when ready, still when waiting or stale) and site props (office, materials, cones, a mixer truck when ready). Topped out: the roof by kind and the roof plant go on, the site clears.
+- **Status** is on the glowing base ring, the beacon on top and the sign by the door: cyan ready, orange waiting, red blocked, steel parked, green landed. Walls use the palette (pink, violet, blue); neon is only on windows, signs, corner strips and lights.
+- **Landed:** crown (spire and halo), trees planted round the base, the landing moment.
+- **Blocked:** fence, hazard tape and a shut red gate, no crane. **Parked:** a blue tarp over the build front, no crane. **Stale** (no update for over 30 days, not parked or landed): windows dim and the crane stops. Over 60 days the walls and steel rust.
+- **The kit by kind**, seeded per project from its `project` id, so the same project gives the same building every visit: podium (shopfront with awning) + shaft + setbacks + roof + attachments (neon corner strips, balconies, pipes, roof plant). Software: glass tower, setbacks, spire; footprint square, twin or L. Making: wide workshop, sawtooth roof, chimney. Hardware: block with pipes, dish and antennas. Career: stepped office, water tank. Athletics: round arena with a dome. Height comes from `size`.
 - City XP = lit floors, plus a landing bonus equal to the building's floors when it lands (an XL landing is worth 24 more, an S landing 6). 30 XP per level. `cityStats()` in `vault-parser.js` and `city_stats()` in `build.py` compute it; the tests check they agree.
-- Height comes from `size`. Within each zone the tallest buildings take the lots nearest the centre.
-- Levels unlock, and every level draws something: roads and core (1), streetlights (2), inner-ring infill and parks (3), a monorail over the ring road (4), outer-ring infill and holo billboards on the roofs (5), skyline towers around the city (6), far-corner streetlights (7), a second monorail on the outer road (8), flying traffic (9), searchlights (10). On a level up the new things rise in. Past level 10 nothing new is drawn yet.
-- Both monorails follow roads, so they never cut through a building.
-- **Shape by kind:** software is a glass tower with setbacks; making a low, wide workshop with a sawtooth roof and chimney; hardware an industrial block with pipes, a dish and antennas; career a stepped office with a rooftop sign; athletics a round arena tower with a dome. The roof shows as a wire outline until the building tops out, then goes solid.
-- **Parked:** the unbuilt floors sit under a tarp and the beacon is steady.
-- **Stale** (no update for over 30 days, not parked or landed): the lights dim and the crane stops. Over 60 days it rusts.
-- Infill placement is seeded, so the city does not reshuffle between refreshes.
-- A lane whose zone is full (the core has 4 lots) spills to the nearest free lot, so a fifth landed project still gets a building.
+- Levels unlock, and every level draws something: roads and the town square (1), streetlights round the square (2), first ring streetlights and parks (3), a monorail over the ring road (4), holo billboards on infill roofs (5), skyline towers in a square band round the city (6), far-corner streetlights (7), a second monorail on the outer road (8), flying traffic (9), searchlights from the square (10). On a level up the new things rise in. Past level 10 nothing new is drawn yet.
+- Street level: blocks with sidewalks, two-lane roads with lane marks, crosswalks on the inner junctions, 26 cars with headlights and tail lights.
+- **Camera:** isometric (orthographic, 35.26° elevation), no orbit mode. Drag turns the city, shift-drag or right-drag pans, scroll zooms, Space toggles the slow spin. The sun is in the title banner, not in the 3D scene.
 
 ## Since your last visit, and the landing moment
 
@@ -107,7 +115,8 @@ The folder picker itself, Chrome's permission prompt and whether sound is heard 
 
 ## Performance
 
-- Each building is a few draw calls, not one per floor: floors with the same footprint are one instanced mesh, and their edges and scaffold one line set each, shown by draw range. Streetlights, trees, rubble, pylons, infill and skyline towers are instanced too. About 365 draw calls for today's city, about 415 with everything unlocked. The tests hold it under 600.
+- Everything repeated is drawn from shared instance pools: one draw call per part type (a facade style and window colour, scaffold, net, frame, hologram, tarp, rings, beacons, crane parts, cars...), not per building. Each building keeps the slots it uses and switches them on as floors are built. Roads, sidewalks, lane marks and crosswalks are merged meshes; all signs are one atlas texture and one mesh. About 60 draw calls and 62K triangles for today's city, about 80 and 72K with everything unlocked (was 365 before art pass 2a). The tests hold it under 600 calls and 150K triangles.
+- Windows never stretch: a small shader patch maps the facade texture by face width and picks one of 8 window rows per floor.
 - Add `#fps` to the end of the page address for a frame-rate readout (FPS, draw calls, triangles). Use it on the laptop.
 
 ## Labels
@@ -117,6 +126,7 @@ Labels are placed nearest building first. A label that would cover another moves
 ## Known limits
 
 - Fonts are built into the page (`vendor/fonts`, latin subsets from @fontsource, SIL Open Font License, see `vendor/fonts/LICENSES.txt`). Symbols outside the latin set (⟳ ♪ ■) use system fonts.
-- No post-processing bloom; glow is faked with emissive materials.
+- No post-processing bloom; glow is faked with emissive materials. Bloom waits for the laptop FPS check (art pass step 4).
+- The cloud test browser renders in software (about 3 FPS), so real frame rates come from the `#fps` check on each machine.
 - Live refresh needs Chrome or Edge. It does not work inside Obsidian or in Firefox; those show the snapshot.
 - Links into Obsidian use `obsidian://open?vault=robin-personal&file=...`, which works on any machine that has the vault open.

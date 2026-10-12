@@ -56,6 +56,14 @@ def city_stats(projects):
     return {"lit": lit, "bonus": bonus, "xp": xp, "level": 1 + xp // XP_PER_LEVEL, "per_level": XP_PER_LEVEL}
 
 
+def real_date(s):
+    try:
+        datetime.date.fromisoformat(s)
+        return True
+    except ValueError:
+        return False
+
+
 def find_vault(explicit):
     for c in ([explicit] if explicit else []) + CANDIDATES:
         if c and os.path.isdir(os.path.join(c, "Projects")):
@@ -161,6 +169,13 @@ def collect(vault, today):
                         stale = d if d > STALE_DAYS else 0
                     except ValueError:
                         warnings.append(f"{rel}: updated '{updated}' is not a real date")
+                # `created` places the building: oldest at the centre, newer ones outward. It never moves after that
+                created = str(fm.get("created") or "")
+                if not created:
+                    warnings.append(f"{rel}: 'created' is empty; placed on the outer edge")
+                elif not re.match(r"^[0-9]{4}-[0-9]{2}-[0-9]{2}$", created) or not real_date(created):
+                    warnings.append(f"{rel}: created '{created}' is not a date (YYYY-MM-DD); placed on the outer edge")
+                    created = ""
                 kind = str(fm.get("kind") or "").lower()
                 if kind not in KINDS:
                     warnings.append(f"{rel}: kind '{kind}' missing or invalid (software|making|hardware|career|athletics)")
@@ -175,7 +190,7 @@ def collect(vault, today):
                     "id": str(fm.get("project") or slug(name)),
                     "code": code, "name": name, "lane": lane, "progress": progress,
                     "north": str(fm.get("northstar") or ""), "next": str(fm.get("next") or ""),
-                    "wait": str(fm.get("waiting_on") or ""), "updated": updated,
+                    "wait": str(fm.get("waiting_on") or ""), "updated": updated, "created": created,
                     "completed": str(fm.get("completed") or ""), "stale": stale,
                     "area": str(fm.get("area") or ""), "kind": kind, "size": size,
                     "floors": SIZE_FLOORS[size], "lit": lit_floors(progress, SIZE_FLOORS[size]), "note": rel,

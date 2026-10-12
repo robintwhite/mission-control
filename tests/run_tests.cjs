@@ -50,7 +50,11 @@ function readTree(dir) {
 function makeEdgeVault(dir) {
   fs.rmSync(dir, { recursive: true, force: true });
   const notes = {
-    "Projects/Good/Good MOC.md": "---\ntype: project\ncode: goo\nname: \"Good One\"\nnorthstar: \"A fine project\"\nprogress: 42\nlane: ready\nkind: software\nsize: L\nnext: \"Do it\"\nwaiting_on: \"\"\nupdated: " + TODAY + "\n---\n# Good MOC\n",
+    "Projects/Good/Good MOC.md": "---\ntype: project\ncode: goo\nname: \"Good One\"\nnorthstar: \"A fine project\"\nprogress: 42\nlane: ready\nkind: software\nsize: L\nnext: \"Do it\"\nwaiting_on: \"\"\nupdated: " + TODAY + "\ncreated: 2026-03-01\n---\n# Good MOC\n",
+    "Projects/TieA/TieA.md": "---\ntype: project\nname: Tie A\nlane: ready\nprogress: 50\nkind: hardware\nsize: M\nnorthstar: n\nnext: x\ncreated: 2026-04-04\n---\n",
+    "Projects/TieB/TieB.md": "---\ntype: project\nname: Tie B\nlane: waiting\nprogress: 0\nkind: making\nsize: S\nnorthstar: n\nnext: x\ncreated: 2026-04-04\n---\n",
+    "Projects/BadCreated/BadCreated.md": "---\ntype: project\nlane: ready\nprogress: 5\nkind: career\nsize: M\nnorthstar: n\nnext: x\ncreated: 2026-13-40\n---\n",
+    "Projects/ListCreated/ListCreated.md": "---\ntype: project\nlane: ready\nprogress: 5\nkind: career\nsize: M\nnorthstar: n\nnext: x\ncreated: [2026-01-01]\n---\n",
     "Projects/Crlf/Crlf.md": "---\r\ntype: project\r\nprogress: 55\r\nlane: Waiting\r\nkind: Hardware\r\nsize: xl\r\nnorthstar: crlf note\r\nnext: next\r\nupdated: 2026-01-02\r\n---\r\n# 🚀 Project Crlf Thing MOC\r\n",
     "Projects/Bom/Bom.md": "\ufeff---\ntype: project\nlane: blocked\nprogress: 1_0\nkind: making\nsize: S\nnorthstar: x\nnext: y\n---\n",
     "Projects/BadLane/BadLane.md": "---\ntype: project\nlane: someday\nprogress: 10\n---\n",
@@ -355,7 +359,8 @@ async function main() {
     await pg.waitForFunction(() => MC.state().show.landings === 1, null, { timeout: 15000 });
     await pg.waitForTimeout(700);
     await pg.screenshot({ path: path.join(OUT, "landing.png") });
-    ok(/LANDED/.test(await pg.textContent("#toast")) && await pg.evaluate(() => document.getElementById("toast").classList.contains("show")), `J. landing moment: toast "${(await pg.textContent("#toast")).replace(/\s+/g, " ")}"`);
+    const toasts = await pg.evaluate(() => MC.state().show.toasts);
+    ok(toasts[0] === "LANDED", `J. landing moment: toasts shown ${JSON.stringify(toasts)} (the slow software renderer can reach the level-up toast before this check)`);
     await pg.waitForFunction(() => MC.state().queue === 0, null, { timeout: 15000 });
     const s = await pg.evaluate(() => MC.state());
     ok(s.towers.every(t => t.shown === realPy.projects.find(p => p.id === t.id).lit), "J. after the show every building is at its real lit floors");
@@ -448,6 +453,97 @@ async function main() {
     const s2 = await p2.evaluate(() => MC.state());
     ok(s2.towers.every(t => t.shown === realPy.projects.find(p => p.id === t.id).lit) && s2.show.floors === 0, "M. reduced motion: floors shown at once, no floor-by-floor show");
     await c2.close();
+  }
+  // O. art pass 2a: placement by start date, stages, status, the kit, the camera, the street, budgets
+  {
+    const { ctx, pg } = await open(page);
+    const s = await pg.evaluate(() => MC.state());
+    const cmpS = (a, b) => (a < b ? -1 : a > b ? 1 : 0);
+    const want = realPy.projects.slice().sort((a, b) => ((a.created ? 0 : 1) - (b.created ? 0 : 1)) || cmpS(a.created, b.created) || cmpS(a.name, b.name) || cmpS(a.note, b.note)).map(p => p.id);
+    const got = s.towers.slice().sort((a, b) => a.lot - b.lot).map(t => t.id);
+    ok(JSON.stringify(got) === JSON.stringify(want), `O. lots go by start date (created), oldest first: ${got.slice(0, 4).join(", ")} ... ${got.slice(-2).join(", ")}`);
+    ok(s.towers.every(t => t.ring >= 1) && s.towers.filter(t => t.ring === 1).length === Math.min(32, s.towers.length), `O. the town square stays free; projects fill the first ring of blocks around it (${s.blocks}x${s.blocks} blocks)`);
+    const ties = [];
+    realPy.projects.forEach((a, i) => realPy.projects.slice(i + 1).forEach(b => { if (a.created && a.created === b.created) ties.push([a.id, b.id]); }));
+    const T = id => s.towers.find(t => t.id === id);
+    ok(ties.length > 0 && ties.every(([a, b]) => Math.abs(T(a).lot - T(b).lot) === 1 && Math.hypot(T(a).x - T(b).x, T(a).z - T(b).z) < 16), `O. same start date sits side by side: ${ties.map(([a, b]) => T(a).lot + "/" + T(b).lot).join(", ")}`);
+    const st = t => t.stage;
+    ok(s.towers.every(t => (st(t).clad || 0) === t.shown), "O. clad, lit floors = lit floors from progress, on every building");
+    const live = s.towers.filter(t => t.lane !== "landed" && t.lane !== "parked" && t.shown < t.floors && realPy.projects.find(p => p.id === t.id).progress > 0);
+    ok(live.every(t => { const left = t.floors - t.shown; return (st(t).scaf || 0) === Math.min(2, left) && (st(t).frame || 0) === Math.min(2, Math.max(0, left - 2)) && (st(t).holo || 0) === Math.max(0, left - 4); }),
+      `O. build front on ${live.length} active sites: 2 floors scaffold and net, 2 floors steel frame ahead, the rest a hologram blueprint`);
+    ok(s.towers.every(t => t.crane === ((t.lane === "ready" || t.lane === "waiting") && t.shown < t.floors && realPy.projects.find(p => p.id === t.id).progress > 0)), "O. a crane on every ready or waiting site that is not topped out");
+    ok(s.towers.every(t => t.status.ring === ({ ready: "#2cf4ff", waiting: "#ffb347", blocked: "#ff4d6d", parked: "#7f8fb3", landed: "#5dffb0" })[t.lane]), "O. the base ring carries the status colour");
+    ok(s.towers.filter(t => t.lane === "landed").every(t => t.trees && t.roof && t.crown && !t.crane && !t.props), "O. landed: scaffold gone, roof and crown on, trees planted, site cleared");
+    const feet = new Set(s.towers.map(t => t.foot)), kits = new Set(s.towers.map(t => t.kit));
+    ok(feet.size >= 4 && kits.size === s.towers.length, `O. the kit varies: footprints ${[...feet].join(", ")}; ${kits.size} different buildings out of ${s.towers.length}`);
+    ok(s.camera.ortho && Math.abs(s.camera.elevation - 35.26) < .01, `O. isometric camera: orthographic, ${s.camera.elevation}° elevation`);
+    const box = await pg.locator("canvas").boundingBox();
+    await pg.mouse.move(box.x + 700, box.y + 300); await pg.mouse.down(); await pg.mouse.move(box.x + 500, box.y + 150, { steps: 5 }); await pg.mouse.up();
+    const s2 = await pg.evaluate(() => MC.state().camera);
+    ok(Math.abs(s2.az - s.camera.az) > .3 && s2.elevation === s.camera.elevation, `O. drag turns the city (az ${s.camera.az.toFixed(2)} -> ${s2.az.toFixed(2)}); the elevation stays isometric`);
+    ok(!s.sceneSun && await pg.locator("header .sun").count() === 1 && await pg.evaluate(() => getComputedStyle(document.querySelector("header .sun")).borderRadius === "50%"), "O. the sun is in the title banner, not in the 3D scene");
+    ok(s.street.roads > 0 && s.street.marks > 100 && s.street.crosswalks > 0 && s.street.cars >= 20 && s.street.carLights === 4 * s.street.cars, `O. street level: ${s.street.roads} roads, ${s.street.marks} lane marks, ${s.street.crosswalks} crosswalks, ${s.street.cars} cars with ${s.street.carLights} lights`);
+    ok(s.perf.calls < 600 && s.perf.tris < 150000, `O. budget: ${s.perf.calls} draw calls (under 600), ${Math.round(s.perf.tris / 1000)}K triangles (under 150K)`);
+    // every stage on one page: zoned, parked, blocked, stale, a ready building at 100%
+    const r = await pg.evaluate(() => { const ps = JSON.parse(JSON.stringify(MC.state().projects)); const by = l => ps.filter(p => p.lane === l);
+      const a = by("ready")[0], b = by("ready")[1], c = by("waiting")[0], d = by("ready")[3], e = by("ready")[2];
+      a.progress = 0; a.lit = 0; b.lane = "parked"; c.lane = "blocked"; d.stale = 75; e.progress = 100; e.lit = e.floors; MC.render({ projects: ps, warnings: [] });
+      const T = id => MC.state().towers.find(t => t.id === id); return { a: T(a.id), b: T(b.id), c: T(c.id), d: T(d.id), e: T(e.id) }; });
+    ok(r.a.stage.holo === r.a.floors && r.a.fence && !r.a.crane && !r.a.props, `O. 0%: zoned lot, fence and a full hologram blueprint (${r.a.id})`);
+    ok(r.b.tarp && !r.b.crane && (r.b.stage.tarp || 0) === Math.min(4, r.b.floors - r.b.shown), `O. parked: a tarp over the build front, no crane (${r.b.id})`);
+    ok(r.c.fence && !r.c.crane, `O. blocked: fence, hazard tape and a shut gate, no crane (${r.c.id})`);
+    ok(r.d.stale === 75 && r.d.rust && r.d.crane && !r.d.craneTurns, `O. stale 75 days: rust, and the crane stands still (${r.d.id})`);
+    ok(r.e.roof && !r.e.crane && !r.e.crown && !r.e.trees, `O. 100% but not landed: topped out with its roof, no crown or trees yet (${r.e.id})`);
+    await pg.evaluate(id => MC.look(id, 14, Math.PI * 1.25 + .3), r.b.id); await pg.waitForTimeout(600);
+    await pg.screenshot({ path: path.join(OUT, "art-stages.png") });
+    await ctx.close();
+  }
+  // P. a building never moves: progress, landing, parking and a new project leave every other building where it was
+  {
+    const { ctx, pg } = await open(page);
+    await stubPicker(pg, realFiles, "robin-personal");
+    await pg.click("#connect");
+    await waitLive(pg);
+    const where = () => pg.evaluate(() => Object.fromEntries(MC.state().towers.map(t => [t.id, [t.x, t.z, t.lot]])));
+    const edit = (note, fn) => pg.evaluate(([note, fn]) => { const parts = (note + ".md").split("/"); let n = FAKE._node; for (const p of parts.slice(0, -1)) n = n.children.get(p);
+      const f = n.children.get(parts[parts.length - 1]).file; f.bytes = new TextEncoder().encode(eval(fn)(new TextDecoder().decode(f.bytes))); f.lastModified = Date.now(); }, [note, fn]);
+    const w0 = await where();
+    const target = realPy.projects.find(p => p.lane === "ready" && p.progress <= 80);
+    await edit(target.note, `t => t.replace(/^progress:.*$/m, "progress: ${target.progress + 20}")`);
+    await pg.click("#refresh"); await pg.waitForFunction(([id, v]) => MC.state().projects.find(p => p.id === id).progress === v, [target.id, target.progress + 20]);
+    const w1 = await where();
+    ok(JSON.stringify(w1) === JSON.stringify(w0), `P. ${target.code} +20% on Refresh: every building stays on its lot (${target.code} lot ${w0[target.id][2]})`);
+    await edit(target.note, `t => t.replace(/^status:.*$/m, "status: completed\\ncompleted: 2026-10-11")`);
+    await pg.click("#refresh"); await pg.waitForFunction(id => MC.state().projects.find(p => p.id === id).lane === "landed", target.id);
+    const w2 = await where();
+    ok(JSON.stringify(w2) === JSON.stringify(w0), `P. ${target.code} lands on Refresh: it stays on lot ${w2[target.id][2]}, nothing else moves`);
+    const other = realPy.projects.find(p => p.lane === "waiting");
+    await edit(other.note, `t => t.replace(/^status:.*$/m, "status: parked")`);
+    await pg.click("#refresh"); await pg.waitForFunction(id => MC.state().projects.find(p => p.id === id).lane === "parked", other.id);
+    ok(JSON.stringify(await where()) === JSON.stringify(w0), `P. ${other.code} parked on Refresh: no building moves`);
+    await pg.evaluate(() => { const dir = FAKE._node.children.get("Projects");
+      dir.children.set("Zz New", { kind: "directory", name: "Zz New", children: new Map([["Zz New.md", { kind: "file", name: "Zz New.md", file: { bytes: new TextEncoder().encode("---\ntype: project\ncode: NEW\nname: Brand New\nnorthstar: n\nprogress: 0\nlane: ready\nkind: software\nsize: S\nnext: x\ncreated: 2099-01-01\n---\n"), lastModified: Date.now() } }]]) }); });
+    await pg.click("#refresh"); await pg.waitForFunction(n => MC.state().towers.length === n, realPy.projects.length + 1);
+    const w4 = await where(), moved = Object.keys(w0).filter(id => JSON.stringify(w4[id]) !== JSON.stringify(w0[id]));
+    ok(moved.length === 0 && w4["brand-new"][2] === realPy.projects.length + 1, `P. a new project takes the next lot (${w4["brand-new"][2]}); none of the others move`);
+    await pg.waitForTimeout(500);
+    await pg.screenshot({ path: path.join(OUT, "art-live.png") });
+    await ctx.close();
+  }
+  // Q. the edge vault: notes without a usable start date go on the outer edge, after every dated one
+  {
+    const { ctx, pg } = await open(page);
+    await stubPicker(pg, edgeFiles, "edge-vault");
+    await pg.click("#connect");
+    await waitLive(pg);
+    const t = await pg.evaluate(() => MC.state().towers);
+    const dated = t.filter(x => x.created), undated = t.filter(x => !x.created);
+    ok(dated.length >= 3 && Math.max(...dated.map(x => x.lot)) < Math.min(...undated.map(x => x.lot)), `Q. ${dated.length} dated projects first, ${undated.length} with no date after them`);
+    const a = t.find(x => x.id === "tie-a"), b = t.find(x => x.id === "tie-b");
+    ok(a && b && Math.abs(a.lot - b.lot) === 1, `Q. Tie A and Tie B (same date) on lots ${a && a.lot} and ${b && b.lot}`);
+    ok(edgePy.warnings.some(w => /BadCreated: created '2026-13-40' is not a date/.test(w)) && edgePy.warnings.some(w => /ListCreated: created/.test(w)), "Q. a bad created date is a warning");
+    await ctx.close();
   }
   ok(errors.length === 0, `no console errors or page errors${errors.length ? ":\n    " + errors.join("\n    ") : ""}`);
   await browser.close();

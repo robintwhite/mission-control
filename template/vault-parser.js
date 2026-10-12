@@ -174,6 +174,13 @@
         stale = d > STALE_DAYS ? d : 0;
       }
     }
+    // `created` places the building: oldest at the centre, newer ones outward. It never moves after that
+    let created = truthy(get("created")) ? pyStr(get("created")) : "";
+    if (!created) warnings.push(rel + ": 'created' is empty; placed on the outer edge");
+    else if (!RE_DATE.test(created) || dayNumber(created) === null) {
+      warnings.push(rel + ": created '" + created + "' is not a date (YYYY-MM-DD); placed on the outer edge");
+      created = "";
+    }
     const kind = (truthy(get("kind")) ? pyStr(get("kind")) : "").toLowerCase();
     if (!KINDS.includes(kind)) warnings.push(rel + ": kind '" + kind + "' missing or invalid (software|making|hardware|career|athletics)");
     let size = (truthy(get("size")) ? pyStr(get("size")) : "").toUpperCase();
@@ -186,7 +193,7 @@
     return {
       id: truthy(get("project")) ? pyStr(get("project")) : slug(name),
       code, name, lane, progress,
-      north: s("northstar"), next: s("next"), wait: s("waiting_on"), updated,
+      north: s("northstar"), next: s("next"), wait: s("waiting_on"), updated, created,
       completed: s("completed"), stale, area: s("area"), kind, size,
       floors: SIZE_FLOORS[size], lit: litFloors(progress, SIZE_FLOORS[size]), note: rel,
       link: "obsidian://open?vault=" + vaultName + "&file=" + quote(rel),
