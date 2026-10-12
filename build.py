@@ -41,6 +41,7 @@ SIZES = {"S", "M", "L", "XL"}
 SIZE_FLOORS = {"S": 6, "M": 10, "L": 16, "XL": 24}  # building height by size (v0.2)
 STALE_DAYS = 30
 XP_PER_LEVEL = 30  # city XP per level. XP = lit floors, plus the building's floors again when it lands
+ACTIVE_DAYS = 7  # a project counts as active (traffic on the roads) when `updated` is this many days old or less
 
 
 def lit_floors(progress, floors):
@@ -53,7 +54,10 @@ def city_stats(projects):
     lit = sum(p["lit"] for p in projects)
     bonus = sum(p["floors"] for p in projects if p["lane"] == "landed")
     xp = lit + bonus
-    return {"lit": lit, "bonus": bonus, "xp": xp, "level": 1 + xp // XP_PER_LEVEL, "per_level": XP_PER_LEVEL}
+    landed = sum(1 for p in projects if p["lane"] == "landed")
+    active7 = sum(1 for p in projects if p["days"] is not None and p["days"] <= ACTIVE_DAYS)
+    return {"lit": lit, "bonus": bonus, "xp": xp, "level": 1 + xp // XP_PER_LEVEL, "per_level": XP_PER_LEVEL,
+            "landed": landed, "active7": active7}
 
 
 def real_date(s):
@@ -169,6 +173,10 @@ def collect(vault, today):
                         stale = d if d > STALE_DAYS else 0
                     except ValueError:
                         warnings.append(f"{rel}: updated '{updated}' is not a real date")
+                # days since `updated` (for landed: since `completed`), for the traffic. None when it is not a real date
+                days = None
+                if re.match(r"^[0-9]{4}-[0-9]{2}-[0-9]{2}$", updated) and real_date(updated):
+                    days = (today - datetime.date.fromisoformat(updated)).days
                 # `created` places the building: oldest at the centre, newer ones outward. It never moves after that
                 created = str(fm.get("created") or "")
                 if not created:
@@ -191,7 +199,7 @@ def collect(vault, today):
                     "code": code, "name": name, "lane": lane, "progress": progress,
                     "north": str(fm.get("northstar") or ""), "next": str(fm.get("next") or ""),
                     "wait": str(fm.get("waiting_on") or ""), "updated": updated, "created": created,
-                    "completed": str(fm.get("completed") or ""), "stale": stale,
+                    "completed": str(fm.get("completed") or ""), "stale": stale, "days": days,
                     "area": str(fm.get("area") or ""), "kind": kind, "size": size,
                     "floors": SIZE_FLOORS[size], "lit": lit_floors(progress, SIZE_FLOORS[size]), "note": rel,
                     "link": "obsidian://open?vault=" + VAULT_NAME + "&file=" + quote(rel),

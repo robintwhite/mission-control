@@ -12,13 +12,16 @@
   const SIZE_FLOORS = { S: 6, M: 10, L: 16, XL: 24 }; // building height by size (v0.2)
   const STALE_DAYS = 30;
   const XP_PER_LEVEL = 30; // city XP per level. XP = lit floors, plus the building's floors again when it lands
+  const ACTIVE_DAYS = 7; // a project counts as active (traffic on the roads) when `updated` is this many days old or less
   // progress % of the building's floors, rounded half up. Integer maths, so it matches build.py exactly
   const litFloors = (progress, floors) => Math.floor((2 * progress * floors + 100) / 200);
   function cityStats(projects) {
     let lit = 0, bonus = 0;
     for (const p of projects) { lit += p.lit; if (p.lane === "landed") bonus += p.floors; }
     const xp = lit + bonus;
-    return { lit, bonus, xp, level: 1 + Math.floor(xp / XP_PER_LEVEL), per_level: XP_PER_LEVEL };
+    const landed = projects.filter(p => p.lane === "landed").length;
+    const active7 = projects.filter(p => p.days !== null && p.days !== undefined && p.days <= ACTIVE_DAYS).length;
+    return { lit, bonus, xp, level: 1 + Math.floor(xp / XP_PER_LEVEL), per_level: XP_PER_LEVEL, landed, active7 };
   }
 
   // Python's str.isspace() set, so strip() and \s behave the same as in build.py
@@ -174,6 +177,9 @@
         stale = d > STALE_DAYS ? d : 0;
       }
     }
+    // days since `updated` (for landed: since `completed`), for the traffic. null when it is not a real date
+    let days = null;
+    if (RE_DATE.test(updated)) { const dn = dayNumber(updated); if (dn !== null) days = dayNumber(today) - dn; }
     // `created` places the building: oldest at the centre, newer ones outward. It never moves after that
     let created = truthy(get("created")) ? pyStr(get("created")) : "";
     if (!created) warnings.push(rel + ": 'created' is empty; placed on the outer edge");
@@ -194,7 +200,7 @@
       id: truthy(get("project")) ? pyStr(get("project")) : slug(name),
       code, name, lane, progress,
       north: s("northstar"), next: s("next"), wait: s("waiting_on"), updated, created,
-      completed: s("completed"), stale, area: s("area"), kind, size,
+      completed: s("completed"), stale, days, area: s("area"), kind, size,
       floors: SIZE_FLOORS[size], lit: litFloors(progress, SIZE_FLOORS[size]), note: rel,
       link: "obsidian://open?vault=" + vaultName + "&file=" + quote(rel),
     };
@@ -243,7 +249,7 @@
     return { projects: sortProjects(projects), warnings: warnings.sort(cmp) };
   }
 
-  const api = { collectVault, parseFrontmatter, titleOf, slug, parseNote, localISODate, cityStats, litFloors, LANES, KINDS, SIZES, SIZE_FLOORS, XP_PER_LEVEL };
+  const api = { collectVault, parseFrontmatter, titleOf, slug, parseNote, localISODate, cityStats, litFloors, LANES, KINDS, SIZES, SIZE_FLOORS, XP_PER_LEVEL, ACTIVE_DAYS };
   if (typeof module !== "undefined" && module.exports) module.exports = api;
   else root.MCParser = api;
 })(typeof window !== "undefined" ? window : globalThis);

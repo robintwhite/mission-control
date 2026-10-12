@@ -5,7 +5,7 @@
 /* Layout: a title banner with a synthwave sun, then an isometric low-poly city builder. Each project is a building on its own lot. Lots are given out by start date (the note's `created`): the oldest round the town square, newer ones outward block by block. A building never moves; it rises floor by floor with progress. Status shows on its base ring, beacon and sign. Detail bay and cards below. */
 :root{
   --bg:#0b0618; --bg2:#140a2a; --panel:#170c33; --line:#3a1f6b;
-  --fg:#f3e9ff; --dim:#9d8bc4; --pink:#ff3cac; --cyan:#2cf4ff; --purple:#9b5cff; --orange:#ffb347; --red:#ff4d6d; --green:#5dffb0; --gold:#ffd166;
+  --fg:#f3e9ff; --dim:#9d8bc4; --pink:#ff3cac; --cyan:#2cf4ff; --purple:#9b5cff; --orange:#ffb347; --red:#ff4d6d; --green:#5dffb0; --gold:#ffd166; --landed:#ffe27a;
   --title:"Monoton",cursive; --display:"Rajdhani",system-ui,sans-serif; --mono:"Share Tech Mono",ui-monospace,monospace;
   color-scheme:dark;
 }
@@ -20,14 +20,14 @@ header.banner .floor{position:absolute;left:0;right:0;bottom:0;height:44px;overf
 header.banner .floor i{position:absolute;left:-60%;right:-60%;top:0;height:120px;transform-origin:50% 0;transform:perspective(70px) rotateX(58deg);
   background-image:repeating-linear-gradient(90deg,rgba(44,244,255,.55) 0 1px,transparent 1px 46px),repeating-linear-gradient(180deg,rgba(255,60,172,.6) 0 1px,transparent 1px 14px);animation:gridrun 2.4s linear infinite}
 @keyframes gridrun{to{background-position:0 0,0 14px}}
-header h1{position:relative;grid-column:2;font-family:var(--title);font-weight:400;font-size:46px;margin:0 0 6px;line-height:1;white-space:nowrap;background:linear-gradient(180deg,#fff 0%,var(--cyan) 30%,var(--cyan) 48%,var(--pink) 56%,var(--pink) 100%);-webkit-background-clip:text;background-clip:text;color:transparent;filter:drop-shadow(0 0 10px rgba(255,60,172,.6)) drop-shadow(0 0 2px rgba(11,6,24,.9))}
+header h1{position:relative;grid-column:2;font-family:var(--title);font-weight:400;font-size:46px;margin:0 0 6px;line-height:1;white-space:nowrap;background:linear-gradient(180deg,#fff 0%,#a8fbff 22%,var(--cyan) 50%,#16c6e8 100%);-webkit-background-clip:text;background-clip:text;color:transparent;filter:drop-shadow(0 0 2px rgba(11,6,24,.95)) drop-shadow(0 0 3px rgba(11,6,24,.9)) drop-shadow(0 0 12px rgba(255,60,172,.55))}
 header .sub{position:relative;grid-column:1;grid-row:1;align-self:end;margin-bottom:10px;font-family:var(--mono);font-size:12px;color:var(--dim);letter-spacing:.15em}
 @media (max-width:760px){header.banner{grid-template-columns:1fr;justify-items:center;padding-top:62px}header h1{grid-column:1;font-size:clamp(24px,8vw,34px)}header .sub{grid-column:1;grid-row:auto;margin:0}header.banner .sun{width:190px;height:190px;margin-left:-95px;top:10px}header .counts{grid-column:1;margin:0 0 6px}}
 .counts{position:relative;grid-column:3;justify-self:end;margin-bottom:8px;display:flex;gap:18px;font-family:var(--mono);font-size:11px;letter-spacing:.1em;color:var(--dim)}
 .counts>div{white-space:nowrap}
 @media (max-width:760px){.counts{gap:12px;font-size:10px}}
 .counts b{display:block;font-family:var(--display);font-size:24px;font-weight:700;line-height:1}
-.c-ready b{color:var(--cyan)}.c-waiting b{color:var(--orange)}.c-blocked b{color:var(--red)}.c-landed b{color:var(--green)}.c-parked b{color:#7f8fb3}
+.c-ready b{color:var(--cyan)}.c-waiting b{color:var(--orange)}.c-blocked b{color:var(--red)}.c-landed b{color:var(--landed)}.c-parked b{color:#7f8fb3}
 .city{position:relative;border:1px solid var(--line);background:radial-gradient(ellipse 70% 60% at 50% 42%,#21104a 0%,#120a2c 55%,#07030f 100%);height:560px;overflow:hidden;box-shadow:0 0 40px rgba(155,92,255,.15) inset}
 .city canvas{position:absolute;inset:0;width:100%;height:100%;display:block}
 .city .hint{position:absolute;bottom:10px;left:14px;font-family:var(--mono);font-size:11px;color:var(--dim);letter-spacing:.15em;z-index:3}
@@ -39,9 +39,9 @@ header .sub{position:relative;grid-column:1;grid-row:1;align-self:end;margin-bot
 .fps{position:absolute;left:14px;bottom:30px;z-index:4;font-family:var(--mono);font-size:11px;letter-spacing:.12em;color:var(--green);background:rgba(11,6,24,.8);border:1px solid var(--line);padding:4px 8px}
 .leaders{position:absolute;inset:0;width:100%;height:100%;pointer-events:none;z-index:3;overflow:visible}
 .leaders line{stroke:#d9ccf5;stroke-opacity:.6;stroke-width:1}
-.toast{position:absolute;left:50%;top:18px;transform:translate(-50%,-8px);z-index:5;pointer-events:none;opacity:0;transition:opacity .4s,transform .4s;text-align:center;background:rgba(11,6,24,.88);border:1px solid var(--green);box-shadow:0 0 24px rgba(93,255,176,.35);padding:10px 22px;max-width:calc(100% - 40px)}
+.toast{position:absolute;left:50%;top:18px;transform:translate(-50%,-8px);z-index:5;pointer-events:none;opacity:0;transition:opacity .4s,transform .4s;text-align:center;background:rgba(11,6,24,.88);border:1px solid var(--landed);box-shadow:0 0 24px rgba(255,226,122,.35);padding:10px 22px;max-width:calc(100% - 40px)}
 .toast.show{opacity:1;transform:translate(-50%,0)}
-.toast .k{font-family:var(--mono);font-size:11px;letter-spacing:.25em;color:var(--green)}
+.toast .k{font-family:var(--mono);font-size:11px;letter-spacing:.25em;color:var(--landed)}
 .toast .t{font-family:var(--display);font-weight:700;font-size:24px;line-height:1.15;color:#fff}
 .toast .x{font-family:var(--mono);font-size:13px;letter-spacing:.12em;color:var(--gold)}
 .toast.lvl{border-color:var(--gold);box-shadow:0 0 24px rgba(255,209,102,.35)}.toast.lvl .k{color:var(--gold)}
@@ -52,7 +52,7 @@ header .sub{position:relative;grid-column:1;grid-row:1;align-self:end;margin-bot
 .since button{font:inherit;letter-spacing:inherit;background:none;border:1px solid var(--line);color:var(--fg);padding:3px 8px;cursor:pointer}
 .since button:hover{border-color:var(--cyan)}
 .since button:focus-visible{outline:1px solid var(--cyan);outline-offset:1px}
-.since .up{color:var(--cyan)}.since .land{color:var(--green);border-color:var(--green)}.since .dn{color:var(--dim)}.since .new{color:var(--pink)}
+.since .up{color:var(--cyan)}.since .land{color:var(--landed);border-color:var(--landed)}.since .dn{color:var(--dim)}.since .new{color:var(--pink)}
 .since .xp{color:var(--gold);margin-left:auto}
 .city .scan{position:absolute;inset:0;pointer-events:none;background:repeating-linear-gradient(0deg,rgba(0,0,0,.14) 0 1px,transparent 1px 3px);z-index:2}
 .hud{position:absolute;top:10px;left:12px;z-index:3;background:rgba(11,6,24,.78);border:1px solid var(--line);padding:10px 14px;display:grid;gap:6px;min-width:250px;max-width:min(330px,calc(100% - 24px))}
@@ -79,7 +79,7 @@ header .sub{position:relative;grid-column:1;grid-row:1;align-self:end;margin-bot
 .detail .kv dd{margin:0;min-width:0}
 .detail a{color:var(--cyan)}
 .flag{display:inline-block;font-family:var(--mono);font-size:11px;letter-spacing:.15em;padding:3px 8px;border:1px solid;width:max-content}
-.f-ready{color:var(--cyan);border-color:var(--cyan)}.f-waiting{color:var(--orange);border-color:var(--orange)}.f-blocked{color:var(--red);border-color:var(--red)}.f-landed{color:var(--green);border-color:var(--green)}.f-parked{color:#7f8fb3;border-color:#7f8fb3}
+.f-ready{color:var(--cyan);border-color:var(--cyan)}.f-waiting{color:var(--orange);border-color:var(--orange)}.f-blocked{color:var(--red);border-color:var(--red)}.f-landed{color:var(--landed);border-color:var(--landed)}.f-parked{color:#7f8fb3;border-color:#7f8fb3}
 .floors{display:flex;gap:3px;align-items:flex-end;height:44px}
 .floors i{flex:1;background:#0a0514;border:1px solid var(--line);height:100%}
 .floors i.on{background:linear-gradient(180deg,var(--cyan),var(--pink));border-color:transparent;box-shadow:0 0 8px rgba(255,60,172,.5)}
@@ -95,6 +95,8 @@ header .sub{position:relative;grid-column:1;grid-row:1;align-self:end;margin-bot
 .unlocks li{display:grid;grid-template-columns:5ch 1fr;gap:10px;font-size:13px;color:var(--dim)}
 .unlocks li.done{color:var(--fg)}.unlocks li.done b{color:var(--green)}.unlocks li.next b{color:var(--gold)}.unlocks li.next{color:var(--fg)}
 .unlocks li b{font-family:var(--mono);font-weight:400;font-size:12px}
+.unlocks h3.mon{margin-top:12px}
+#monuments li{grid-template-columns:9ch 1fr}
 .cards{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:10px}
 .card{background:var(--panel);border:1px solid var(--line);padding:10px 12px;cursor:pointer;display:grid;gap:5px;min-width:0;text-align:left;color:inherit;font:inherit}
 .card:hover,.card.sel{border-color:var(--pink);box-shadow:0 0 14px rgba(255,60,172,.25)}
@@ -147,14 +149,15 @@ footer{font-family:var(--mono);font-size:11px;color:var(--dim);letter-spacing:.0
     <div class="hud" id="hud"></div>
     <div class="key">
       <div>STATUS = BASE RING · BEACON · SIGN</div>
-      <div><span style="color:var(--cyan)">■ READY</span> <span style="color:var(--orange)">■ WAITING</span> <span style="color:var(--red)">■ BLOCKED</span> <span style="color:#7f8fb3">■ PARKED</span> <span style="color:var(--green)">■ LANDED</span></div>
+      <div><span style="color:var(--cyan)">■ READY</span> <span style="color:var(--orange)">■ WAITING</span> <span style="color:var(--red)">■ BLOCKED</span> <span style="color:#7f8fb3">■ PARKED</span> <span style="color:var(--landed)">■ LANDED</span></div>
       <div style="color:var(--dim)">OLDEST ROUND THE SQUARE · NEWER ONES OUTWARD</div>
-      <div style="color:var(--dim)">BLUEPRINT → FRAME → SCAFFOLD → LIT FLOORS</div>
-      <div style="color:var(--dim)">SHAPE = KIND · TARP = PARKED · DIM, THEN RUST = STALE</div>
+      <div style="color:var(--dim)">BLUEPRINT → FRAME → SCAFFOLD → CLAD FLOORS</div>
+      <div style="color:var(--dim)">LIGHTS ON + GOLD RING = LANDED · WORK LIGHTS = BUILDING</div>
+      <div style="color:var(--dim)">SHAPE = KIND · TARP = PARKED · DARK, THEN RUST = STALE</div>
     </div>
     <svg class="leaders" id="leaders" aria-hidden="true"></svg>
     <div class="toast" id="toast" aria-live="polite"></div>
-    <div class="hint">EVERY LABELLED BUILDING IS A PROJECT · HEIGHT = SIZE · LIT FLOORS = DONE · DRAG = TURN · SHIFT+DRAG = PAN · SCROLL = ZOOM · SPACE = SPIN</div>
+    <div class="hint">EVERY LABELLED BUILDING IS A PROJECT · HEIGHT = SIZE · BUILT FLOORS = DONE · DRAG = TURN · SHIFT+DRAG = PAN · SCROLL = ZOOM · SPACE = SPIN</div>
     <div class="ctl">
       <button id="snd" type="button" aria-pressed="true" title="Landing sound on/off. Remembered in this browser.">♪ SOUND ON</button>
       <button class="spin" id="spin" type="button" aria-pressed="true" title="Auto spin on/off (Space). Resumes by itself 10 s after you stop dragging.">⟳ SPIN ON</button>
@@ -165,7 +168,7 @@ footer{font-family:var(--mono);font-size:11px;color:var(--dim);letter-spacing:.0
     <section class="detail" id="detail" aria-live="polite"></section>
     <div class="side">
       <section class="attn"><h3>NEEDS ME BEFORE IT CAN MOVE</h3><ul id="attn"></ul></section>
-      <section class="unlocks"><h3>CITY LEVELS · 1 XP PER LIT FLOOR · LANDING DOUBLES IT</h3><ul id="unlocks"></ul></section>
+      <section class="unlocks"><h3>CITY LEVELS · 1 XP PER BUILT FLOOR · LANDING DOUBLES IT</h3><ul id="unlocks"></ul><h3 class="mon">MONUMENTS · PROJECTS LANDED</h3><ul id="monuments"></ul></section>
     </div>
   </div>
   <div class="cards" id="cards"></div>
@@ -181,9 +184,13 @@ footer{font-family:var(--mono);font-size:11px;color:var(--dim);letter-spacing:.0
 /*PARSER*/
 </script>
 <script>
-const C={ready:"#2cf4ff",waiting:"#ffb347",blocked:"#ff4d6d",parked:"#7f8fb3",landed:"#5dffb0"};
+const C={ready:"#2cf4ff",waiting:"#ffb347",blocked:"#ff4d6d",parked:"#7f8fb3",landed:"#ffe27a"};
 const LANE={ready:"READY TO FLY",waiting:"WAITING ON ME",blocked:"BLOCKED",parked:"PARKED",landed:"LANDED"};
-const UNLOCKS=[[1,"Roads and the town square"],[2,"Streetlights round the town square"],[3,"First-ring streetlights, infill and parks"],[4,"Monorail loop over the ring road"],[5,"Outer-ring infill, holo billboards on the roofs"],[6,"Skyline towers in a square band round the city"],[7,"Streetlights reach the far corners"],[8,"Second monorail on the outer road"],[9,"Flying traffic"],[10,"Searchlights sweep the sky from the square"]];
+const UNLOCKS=[[1,"Plain roads, the town square and Mission Control HQ"],[2,"Streetlights round the town square"],[3,"The city grows two blocks a level. Lane marks, crosswalks, first-ring lights, infill and parks"],[4,"Monorail loop over the ring road"],[5,"Holo billboards on the roofs"],[6,"Neon edges on every road"],[7,"Streetlights on every block, out to the edge"],[8,"Second monorail on the outer road"],[9,"Flying traffic"],[10,"Searchlights sweep the sky from HQ"]];
+const GROW_TEXT="Two new blocks at the city edge, and HQ grows a floor";
+const unlockText=lv=>UNLOCKS[lv-1]?UNLOCKS[lv-1][1]:GROW_TEXT;
+// monuments on the town square, by projects landed
+const MONUMENTS=[[5,"plaza","A plaza with a statue"],[10,"pad","A launch pad"],[25,"rocket","A rocket that launches"]];
 const KIND={software:"SOFTWARE",making:"MAKING",hardware:"HARDWARE",career:"CAREER",athletics:"ATHLETICS"};
 const $=id=>document.getElementById(id);
 const esc=s=>String(s).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
@@ -199,8 +206,10 @@ function renderPanels(){
   $("counts").innerHTML=order.map(l=>`<div class="c-${l}"><b>${byLane(l).length}</b>${LANE[l]}</div>`).join("");
   STATS=MCParser.cityStats(PROJECTS);LEVEL=STATS.level;
   const per=STATS.per_level,nextAt=LEVEL*per,into=STATS.xp-(LEVEL-1)*per;
-  $("hud").innerHTML=`<div class="lvl"><b>LVL ${LEVEL}</b><span>CITY LEVEL</span></div><div class="xp"><i style="--p:${(into/per*100).toFixed(0)}%"></i></div><div class="xpl"><span>${STATS.xp} XP · ${STATS.lit} FLOORS LIT</span><span>LVL ${LEVEL+1} AT ${nextAt}</span></div><div class="unl">${nextAt-STATS.xp} XP to go. Next: <em>${UNLOCKS[LEVEL]?UNLOCKS[LEVEL][1]:"everything built"}</em></div>`;
-  $("unlocks").innerHTML=UNLOCKS.map(([n,t])=>`<li class="${n<=LEVEL?"done":n===LEVEL+1?"next":""}"><b>LVL ${n}</b><span>${n<=LEVEL?"✓ ":n===LEVEL+1?"▸ ":""}${t}</span></li>`).join("");
+  $("hud").innerHTML=`<div class="lvl"><b>LVL ${LEVEL}</b><span>CITY LEVEL</span></div><div class="xp"><i style="--p:${(into/per*100).toFixed(0)}%"></i></div><div class="xpl"><span>${STATS.xp} XP · ${STATS.lit} FLOORS BUILT</span><span>LVL ${LEVEL+1} AT ${nextAt}</span></div><div class="unl">${nextAt-STATS.xp} XP to go. Next: <em>${esc(unlockText(LEVEL+1))}</em></div><div class="xpl"><span>${STATS.active7||0} ACTIVE THIS WEEK · ${carCount()} CARS</span><span>${STATS.landed||0} LANDED</span></div>`;
+  $("unlocks").innerHTML=UNLOCKS.map(([n,t])=>`<li class="${n<=LEVEL?"done":n===LEVEL+1?"next":""}"><b>LVL ${n}</b><span>${n<=LEVEL?"✓ ":n===LEVEL+1?"▸ ":""}${t}</span></li>`).join("")+`<li class="${LEVEL>=11?"done":LEVEL===10?"next":""}"><b>11+</b><span>${LEVEL>=11?"✓ ":LEVEL===10?"▸ ":""}${GROW_TEXT}. No cap</span></li>`;
+  const L=STATS.landed||0,nextM=MONUMENTS.find(([n])=>L<n);
+  $("monuments").innerHTML=MONUMENTS.map(([n,,t])=>`<li class="${L>=n?"done":nextM&&nextM[0]===n?"next":""}"><b>${n} LANDED</b><span>${L>=n?"✓ ":nextM&&nextM[0]===n?`▸ ${n-L} TO GO · `:""}${t}</span></li>`).join("");
   const cards=$("cards");cards.replaceChildren();
   order.forEach(l=>byLane(l).forEach(p=>{const b=document.createElement("button");b.type="button";b.className="card";b.dataset.id=p.id;
     b.innerHTML=`<div class="t"><span>${esc(p.name)}</span><small>${esc(p.code)} · ${esc(p.size)}${p.stale?` <span class="stale">STALE</span>`:""}</small></div><div class="n">${esc(p.north)}</div><div class="m"><i style="--p:${p.progress}%;--c:${C[p.lane]}"></i><span style="color:${C[p.lane]}">${p.progress}%</span></div>`;
@@ -218,9 +227,10 @@ function select(id,focus){const p=PROJECTS.find(x=>x.id===id);
   document.querySelectorAll(".card").forEach(c=>c.classList.toggle("sel",c.dataset.id===id));
   $("detail").innerHTML=`<div class="eyebrow">BUILDING ${esc(p.code)} · ${KIND[p.kind]||"NO KIND"} · SIZE ${esc(p.size)}${lotOf(p.id)?" · LOT "+lotOf(p.id):""}</div><h2>${esc(p.name)}</h2><span class="flag f-${p.lane}">${LANE[p.lane]}</span><div class="north">${esc(p.north)}</div>
     <div class="floors">${Array.from({length:N},(_,i)=>`<i class="${i<n?"on":""}"></i>`).join("")}</div>
-    <div class="meterline"><span>${n} OF ${N} FLOORS LIT${p.lane!=="landed"?` · ${left} MORE = +${left} XP · LANDING +${N} XP`:` · LANDED +${N} XP`}</span><b>${p.progress}%</b></div>
+    <div class="meterline"><span>${n} OF ${N} FLOORS BUILT${p.lane!=="landed"?` · ${left} MORE = +${left} XP · LANDING +${N} XP`:` · LANDED +${N} XP`}</span><b>${p.progress}%</b></div>
     <dl class="kv"><dt>NEXT</dt><dd>${esc(p.next||"Topped out "+(p.completed||""))}</dd>${p.wait?`<dt>WAITING</dt><dd style="color:var(--orange)">${esc(p.wait)}</dd>`:""}<dt>STARTED</dt><dd style="font-family:var(--mono)">${p.created?esc(p.created):"NO DATE · ADD created: TO THE NOTE"}</dd><dt>UPDATED</dt><dd style="font-family:var(--mono)">${esc(p.updated)}${p.stale?` · <span class="stale">${p.stale} DAYS, STALE</span>`:""}</dd><dt>NOTE</dt><dd><a href="${esc(p.link)}">Open in Obsidian</a> <span style="font-family:var(--mono);font-size:11px;color:var(--dim);overflow-wrap:anywhere">${esc(p.note)}.md</span></dd></dl>`;
   if(focus&&window.focusBuilding)focusBuilding(id);
+  if(window.drawBoard)drawBoard();
 }
 
 // ---------- 3D: an isometric city builder (art pass 2a). The fixed scene is made once; the city is rebuilt on every render ----------
@@ -250,17 +260,18 @@ const M4=(x,y,z,sx,sy,sz,ry,rx,rz)=>new THREE.Matrix4().compose(_v.set(x,y,z),_q
 const ROWS=8;
 function canvasTex(w,h,draw,opt){const c=document.createElement("canvas");c.width=w;c.height=h;draw(c.getContext("2d"),w,h);const t=new THREE.CanvasTexture(c);t.wrapS=t.wrapT=THREE.RepeatWrapping;t.anisotropy=4;if(opt&&opt.nearest)t.magFilter=THREE.NearestFilter;t.userData={keep:true};return t}
 // one facade style = a diffuse mask (wall white, windows dark) and an emissive mask (lit windows white). Column 0..3 of each row is plain wall.
-function facadeTex(style){const R=mulberry(hashStr(style)),lit=[];for(let r=0;r<ROWS;r++){const row=[];for(let i=0;i<8;i++)row.push(R()<(style==="shop"?.9:.72));lit.push(row)}
+function facadeTex(style){const R=mulberry(hashStr(style)),lit=[],work=[];for(let r=0;r<ROWS;r++){const row=[],wk=[];for(let i=0;i<8;i++){row.push(R()<(style==="shop"?.9:.72));wk.push(R()<.13)}lit.push(row);work.push(wk)}
+  let mask=lit;
   const cell=(g,emis)=>(x,y,w,h,on)=>{if(emis){g.fillStyle=on?"#fff":"#000"}else g.fillStyle=on?"#3a3550":"#2a2540";g.fillRect(x,y,w,h)};
   const draw=emis=>(g,W,H)=>{g.fillStyle=emis?"#000":"#fff";g.fillRect(0,0,W,H);const rh=H/ROWS;
     for(let r=0;r<ROWS;r++){const y0=r*rh,c=cell(g,emis);
       if(!emis){g.fillStyle="#cfc8e6";g.fillRect(0,y0,W,3)}   // the floor line
-      for(let i=0;i<8;i++){const x0=i*32,on=lit[r][i];
+      for(let i=0;i<8;i++){const x0=i*32,on=emis?mask[r][i]:lit[r][i];
         if(style==="grid"){c(x0+8,y0+rh*.28,16,rh*.46,on)}
         else if(style==="band"){c(x0+4,y0+rh*.32,26,rh*.36,on)}
         else if(style==="glass"){c(x0+6,y0+rh*.14,22,rh*.74,on)}
         else if(style==="shop"){c(x0+5,y0+rh*.22,24,rh*.62,on)}}}};
-  return{map:canvasTex(256,ROWS*32,draw(false)),emis:canvasTex(256,ROWS*32,draw(true))}}
+  const out={map:canvasTex(256,ROWS*32,draw(false)),emis:canvasTex(256,ROWS*32,draw(true))};mask=work;out.work=canvasTex(256,ROWS*32,draw(true));return out}
 const TEX={};["grid","band","glass","shop"].forEach(s=>TEX[s]=facadeTex(s));
 const lineTex=(fn)=>canvasTex(128,128,(g,W,H)=>{g.clearRect(0,0,W,H);fn(g,W,H)});
 TEX.scaf=lineTex((g,W,H)=>{g.fillStyle="#fff";g.fillRect(0,0,W,9);g.fillRect(0,H/2-4,W,8);g.fillRect(0,0,8,H);g.fillRect(W/2-4,0,8,H);g.fillStyle="rgba(255,255,255,.85)";g.save();g.translate(0,0);g.beginPath();g.moveTo(8,H/2);g.lineTo(W/2,8);g.lineWidth=5;g.strokeStyle="#fff";g.stroke();g.restore()});
@@ -285,7 +296,9 @@ function shellShader(sh,span,round){sh.vertexShader=sh.vertexShader.replace("#in
 { float sx=length(instanceMatrix[0].xyz),sz=length(instanceMatrix[2].xyz); vec3 nn=normalize(normal);
   float w=abs(nn.x)>0.5?sz:sx; ${round?"w=sx*3.14159;":""} vUv=vec2(uv.x*w/${span.toFixed(2)},uv.y); }
 #endif`)}
-function facadeMat(style,hex,dim,round){const m=new THREE.MeshLambertMaterial({color:0xffffff,map:TEX[style].map,emissive:new THREE.Color(hex),emissiveMap:TEX[style].emis,emissiveIntensity:dim?.32:1});
+// Light modes. Only a landed building (and HQ) has its lights on. An active site shows a few warm work lights; a stopped one is dark.
+const LIGHT={lit:1,work:.75,off:0,infill:.32};
+function facadeMat(style,hex,mode,round){const work=mode==="work",m=new THREE.MeshLambertMaterial({color:0xffffff,map:TEX[style].map,emissive:new THREE.Color(work?WORK_HEX:hex),emissiveMap:work?TEX[style].work:TEX[style].emis,emissiveIntensity:LIGHT[mode]});
   m.onBeforeCompile=sh=>facadeShader(sh,4.4,round);m.customProgramCacheKey=()=>"facade"+(round?"r":"");return m}
 function shellMat(tex,span,opt){const m=new (opt.lit?THREE.MeshLambertMaterial:THREE.MeshBasicMaterial)(Object.assign({color:0xffffff,map:tex,side:THREE.DoubleSide},opt.params||{}));
   m.onBeforeCompile=sh=>shellShader(sh,span,opt.round);m.customProgramCacheKey=()=>"shell"+span+(opt.round?"r":"");return m}
@@ -297,30 +310,41 @@ function toothGeo(){const a=-.5,b=.5,z0=-.5,z1=.5,h=1;const v=[a,0,z0,b,0,z0,b,h
   const g=new THREE.BufferGeometry();g.setAttribute("position",new THREE.Float32BufferAttribute(v,3));g.computeVertexNormals();return g}
 
 // ---- instance pools: slots are reserved while the city is planned, then each pool becomes one InstancedMesh ----
-class Pool{constructor(geo,mat,parent){this.geo=geo;this.mat=mat;this.parent=parent;this.list=[];this.mesh=null;this.dm=false;this.dc=false}
-  add(m,col,on){this.list.push({m,c:col!==undefined&&col!==null?new THREE.Color(col):null,on:on!==false});return this.list.length-1}
-  build(){if(!this.list.length)return;const im=new THREE.InstancedMesh(this.geo,this.mat,this.list.length);im.frustumCulled=false;
-    this.list.forEach((e,i)=>{im.setMatrixAt(i,e.on?e.m:ZERO);if(e.c)im.setColorAt(i,e.c)});this.parent.add(im);this.mesh=im}
-  set(i,on){const e=this.list[i];if(e.on===on)return;e.on=on;this.mesh.setMatrixAt(i,on?e.m:ZERO);this.dm=true}
-  setM(i,m){this.mesh.setMatrixAt(i,m);this.dm=true}
-  setC(i,c){this.mesh.setColorAt(i,c);this.dc=true}
+// Only the slots that are on are drawn: an off slot is swapped out of the drawn range (mesh.count), so hidden parts
+// (the build stages of finished floors, say) cost nothing on the GPU however big the city gets.
+const WHITE=new THREE.Color(0xffffff);
+class Pool{constructor(geo,mat,parent){this.geo=geo;this.mat=mat;this.parent=parent;this.list=[];this.mesh=null;this.dm=false;this.dc=false;this.count=0}
+  add(m,col,on){this.list.push({m,c:col!==undefined&&col!==null?new THREE.Color(col):null,on:on!==false,cur:null});return this.list.length-1}
+  build(){const n=this.list.length;if(!n)return;const im=new THREE.InstancedMesh(this.geo,this.mat,n);im.frustumCulled=false;this.mesh=im;
+    this.hasC=this.list.some(e=>e.c);if(this.hasC)im.setColorAt(0,WHITE);
+    this.idx=new Int32Array(n).fill(-1);this.who=new Int32Array(n);this.count=0;
+    this.list.forEach((e,i)=>{if(e.on)this._on(i)});im.count=this.count;this.parent.add(im)}
+  _write(pos,i){const e=this.list[i];this.mesh.setMatrixAt(pos,e.cur||e.m);if(this.hasC)this.mesh.setColorAt(pos,e.c||WHITE)}
+  _on(i){const pos=this.count++;this.idx[i]=pos;this.who[pos]=i;this._write(pos,i)}
+  set(i,on){const e=this.list[i];if(e.on===on)return;e.on=on;if(!this.mesh)return;
+    if(on)this._on(i);else{const pos=this.idx[i],last=--this.count;if(pos!==last){const j=this.who[last];this.who[pos]=j;this.idx[j]=pos;this._write(pos,j)}this.idx[i]=-1}
+    this.mesh.count=this.count;this.dm=true;if(this.hasC)this.dc=true}
+  setM(i,m){const e=this.list[i];(e.cur||(e.cur=new THREE.Matrix4())).copy(m);const pos=this.idx?this.idx[i]:-1;if(pos>=0){this.mesh.setMatrixAt(pos,m);this.dm=true}}
+  setC(i,c){const e=this.list[i];(e.c||(e.c=new THREE.Color())).copy(c);const pos=this.idx?this.idx[i]:-1;if(pos>=0&&this.hasC){this.mesh.setColorAt(pos,c);this.dc=true}}
   flush(){if(!this.mesh)return;if(this.dm){this.mesh.instanceMatrix.needsUpdate=true;this.dm=false}if(this.dc&&this.mesh.instanceColor){this.mesh.instanceColor.needsUpdate=true;this.dc=false}}}
 let pools={},poolList=[];
 function pool(key,mkGeo,mkMat,parent){let p=pools[key];if(!p){p=new Pool(mkGeo(),mkMat(),parent||city);pools[key]=p;poolList.push(p)}return p}
 // the shared kit parts
-const G={box:()=>new THREE.BoxGeometry(1,1,1),cyl:()=>new THREE.CylinderGeometry(.5,.5,1,12),cylLo:()=>new THREE.CylinderGeometry(.5,.5,1,8),
+const G={box:()=>new THREE.BoxGeometry(1,1,1),cyl:()=>new THREE.CylinderGeometry(.5,.5,1,10),cylLo:()=>new THREE.CylinderGeometry(.5,.5,1,8),
   sphere:()=>new THREE.IcosahedronGeometry(.5,0),half:()=>new THREE.SphereGeometry(.5,12,6,0,Math.PI*2,0,Math.PI/2),cone:()=>new THREE.ConeGeometry(.5,1,6),
-  ring:()=>{const g=new THREE.RingGeometry(.86,1,40);g.rotateX(-Math.PI/2);return g},torus:()=>{const g=new THREE.TorusGeometry(.5,.06,6,24);g.rotateX(Math.PI/2);return g},tooth:toothGeo};
+  ring:()=>{const g=new THREE.RingGeometry(.86,1,32);g.rotateX(-Math.PI/2);return g},torus:()=>{const g=new THREE.TorusGeometry(.5,.06,4,14);g.rotateX(Math.PI/2);return g},tooth:toothGeo};
 const lam=()=>new THREE.MeshLambertMaterial({color:0xffffff}),bas=()=>new THREE.MeshBasicMaterial({color:0xffffff});
 const P_={
-  facade:(style,hex,dim,round)=>pool(`f|${style}|${hex}|${dim?1:0}|${round?1:0}`,round?G.cyl:G.box,()=>facadeMat(style,hex,dim,round)),
-  solid:()=>pool("solid",G.box,lam),cyl:()=>pool("cyl",G.cyl,lam),glow:()=>pool("glow",G.box,bas),
+  facade:(style,hex,mode,round)=>pool(`f|${style}|${mode==="work"?WORK_HEX:mode==="off"?0:hex}|${mode}|${round?1:0}`,round?G.cyl:G.box,()=>facadeMat(style,hex,mode,round)),
+  solid:()=>pool("solid",G.box,lam),cyl:()=>pool("cyl",G.cyl,lam),glow:()=>pool("glow",G.box,bas),strip:()=>pool("strip",()=>sidesBox,bas),pipe:()=>pool("pipe",()=>new THREE.CylinderGeometry(.5,.5,1,6,1,true),lam),
   scaf:r=>pool("scaf"+(r?"r":""),()=>r?sidesCyl:sidesBox,()=>shellMat(TEX.scaf,1.6,{round:r,params:{alphaTest:.5}})),
   net:r=>pool("net"+(r?"r":""),()=>r?sidesCyl:sidesBox,()=>shellMat(TEX.net,1.2,{round:r,params:{transparent:true,opacity:.42,depthWrite:false}})),
   frame:r=>pool("frame"+(r?"r":""),()=>r?sidesCyl:sidesBox,()=>shellMat(TEX.frame,1.5,{round:r,params:{alphaTest:.5}})),
   holo:r=>pool("holo"+(r?"r":""),()=>r?sidesCyl:sidesBox,()=>shellMat(TEX.holo,1.5,{round:r,params:{transparent:true,opacity:.5,depthWrite:false,blending:THREE.AdditiveBlending}})),
   tarp:r=>pool("tarp"+(r?"r":""),r?G.cylLo:G.box,()=>new THREE.MeshLambertMaterial({color:0xffffff,map:TEX.tarp,emissive:0x1a2a66})),
   ring:()=>pool("ring",G.ring,()=>new THREE.MeshBasicMaterial({color:0xffffff,transparent:true,opacity:.85,depthWrite:false,blending:THREE.AdditiveBlending,side:THREE.DoubleSide})),
+  // the landed ring: wider, gold, and pulsing slowly (set per frame), so it never reads like an in-progress ring
+  ringWide:()=>pool("ringWide",()=>{const g=new THREE.RingGeometry(.72,1,24);g.rotateX(-Math.PI/2);return g},()=>new THREE.MeshBasicMaterial({color:0xffffff,side:THREE.DoubleSide,polygonOffset:true,polygonOffsetFactor:-1})),
   beacon:()=>pool("beacon",G.sphere,bas),half:()=>pool("half",G.half,()=>new THREE.MeshLambertMaterial({color:0xffffff,side:THREE.DoubleSide})),
   tooth:()=>pool("tooth",G.tooth,lam),torus:()=>pool("torus",G.torus,bas),tree:()=>pool("tree",G.sphere,lam),cone:()=>pool("cone",G.cone,lam),
   tape:()=>pool("tape",G.box,()=>new THREE.MeshBasicMaterial({map:TEX.tape})),
@@ -328,7 +352,7 @@ const P_={
 // palette (walls) and neon (windows, signs, edges). Decoration never uses the lane colours, which belong to the status.
 const WALLS=[[0x9b2470,0xd2488f],[0x45308e,0x6d52cf],[0x22377c,0x3d63c4],[0x5b2066,0x8e3d9b],[0x7a1d5c,0xb23a86],[0x2f2a78,0x5047b8]];
 const NEON={cyan:0x2cf4ff,amber:0xffb347,pink:0xff5fbf,lav:0xb9a4ff};
-const RUST=new THREE.Color("#b4532a"),STEEL=0xffc93c,STEEL_RUST=0x9a5a32,TARPC=0x4f8dff;
+const RUST=new THREE.Color("#b4532a"),STEEL=0xffc93c,STEEL_RUST=0x9a5a32,TARPC=0x4f8dff,WORK_HEX=0xffb070,UNLIT=0x2c2448;
 
 let city=null,buildings=[],labels=[],pickables=[],cars=[],trains=[],queue=[],unlockGroups=[],signs=[],blinkers=[],fliers=[],searchlights=[],cranes=[],STREET={};
 const keepTex=t=>t&&t.userData&&t.userData.keep;
@@ -388,23 +412,25 @@ function makeBuilding(p,lot,atlasCell,SB){
   const lane=p.lane,N=p.floors,n=p.lit,S=KIND_SHAPE[p.kind]||KIND_SHAPE.software,FH=FLOOR*S.fh,topY=N*FH,K=planKit(p);
   const stale=p.stale||0,dim=stale>0,rusty=stale>60,zoned=p.progress<=0,round=K.foot==="round",laneHex=C[lane];
   const X=lot.x,Z=lot.z,wall=new THREE.Color(K.pal[0]),trim=new THREE.Color(K.pal[1]);if(rusty){wall.lerp(RUST,.55);trim.lerp(RUST,.55)}
-  const steel=rusty?STEEL_RUST:STEEL,winHex=dim?NEON.lav:NEON[K.win];
+  const steel=rusty?STEEL_RUST:STEEL,winHex=NEON[K.win];
+  // lights: on only when landed; a few warm work lights on an active (ready or waiting) site; dark when stopped or stale
+  const mode=lane==="landed"?"lit":(lane==="ready"||lane==="waiting")&&!dim?"work":"off",EDGE=mode==="lit"?NEON[K.edge]:UNLIT;
   const scaleAt=f=>{let s=1;for(const[fr,sc]of K.steps)if(N>=6&&f>0&&f>=Math.ceil(N*fr))s=sc;return s};
-  const b={p,pos:new THREE.Vector3(X,0,Z),N,FH,topY,shown:n,kit:K,stale,round,floors:[],tog:{roof:[],crown:[],crane:[],props:[],fence:[],found:[],trees:[]},crownSlots:[],flashAt:-1e9,landAt:-1e9,lot};
+  const b={p,pos:new THREE.Vector3(X,0,Z),N,FH,topY,shown:n,kit:K,stale,round,mode,holoHex:laneHex,holoFull:false,floors:[],tog:{roof:[],crown:[],crane:[],props:[],fence:[],found:[],trees:[]},crownSlots:[],flashAt:-1e9,landAt:-1e9,lot};
   const slot=(list,P,m,col,on)=>list.push([P,P.add(m,col,on===undefined?false:on)]);
   // per floor: clad (wall with windows, corner neon, balconies), scaffold + net, frame + slab, hologram, tarp
-  for(let f=0;f<N;f++){const s=scaleAt(f),y=f*FH+FH/2,fl={clad:[],scaf:[],frame:[],holo:[],tarp:[],rect:null};
+  for(let f=0;f<N;f++){const s=scaleAt(f),y=f*FH+FH/2,fl={clad:[],scaf:[],net:[],frame:[],holo:[],tarp:[],rect:null};
     const rs=f===0&&K.foot==="twin"?[{x:0,z:0,w:K.W,d:K.D}]:K.rects;
     let bx0=1e9,bx1=-1e9,bz0=1e9,bz1=-1e9;
     rs.forEach((r,ri)=>{const w=r.w*s,d=r.d*s,x=X+r.x*s,z=Z+r.z*s;bx0=Math.min(bx0,x-w/2);bx1=Math.max(bx1,x+w/2);bz0=Math.min(bz0,z-d/2);bz1=Math.max(bz1,z+d/2);
       const style=f===0?"shop":S.win,m=round?M4(x,y,z,w,FH,w):M4(x,y,z,w,FH,d);
-      slot(fl.clad,P_.facade(style,f===0?NEON.amber:winHex,dim,round),m,f===0?trim:wall);
-      if(!round&&f>0&&ri===0)K.strips.forEach((on,ci)=>{if(!on)return;const cx=ci===0||ci===3?-1:1,cz=ci<2?1:-1;slot(fl.clad,P_.glow(),M4(x+cx*(w/2+.02),y,z+cz*(d/2+.02),.09,FH,.09),dim?0x6a4bb0:NEON[K.edge])});
-      if(!round&&K.balcony&&f>0&&f%2===0&&ri===0)slot(fl.clad,P_.solid(),M4(x,y-FH*.42,z+d/2+.18,w*.8,.08,.36),trim);
+      slot(fl.clad,P_.facade(style,f===0?NEON.amber:winHex,mode,round),m,f===0?trim:wall);
+      if(!round&&f>0&&ri===0)K.strips.forEach((on,ci)=>{if(!on)return;const cx=ci===0||ci===3?-1:1,cz=ci<2?1:-1;slot(fl.clad,P_.strip(),M4(x+cx*(w/2+.02),y,z+cz*(d/2+.02),.09,FH,.09),EDGE)});
+      if(!round&&K.balcony&&f>0&&f%3===0&&ri===0)slot(fl.clad,P_.solid(),M4(x,y-FH*.42,z+d/2+.18,w*.8,.08,.36),trim);
       const g=.32,wm=round?M4(x,y,z,w+g,FH,w+g):M4(x,y,z,w+g,FH,d+g);
-      slot(fl.scaf,P_.scaf(round),wm,steel);slot(fl.scaf,P_.net(round),round?M4(x,y,z,w+g+.04,FH,w+g+.04):M4(x,y,z,w+g+.04,FH,d+g+.04),0x3ddc97);
+      slot(fl.scaf,P_.scaf(round),wm,steel);slot(fl.net,P_.net(round),round?M4(x,y,z,w+g+.04,FH,w+g+.04):M4(x,y,z,w+g+.04,FH,d+g+.04),0x3ddc97);
       slot(fl.frame,P_.frame(round),round?M4(x,y,z,w,FH,w):M4(x,y,z,w,FH,d),steel);slot(fl.frame,P_.solid(),round?M4(x,f*FH+.04,z,w*.95,.08,w*.95):M4(x,f*FH+.04,z,w,.08,d),0x4a3f6e);
-      slot(fl.holo,P_.holo(round),round?M4(x,y,z,w,FH,w):M4(x,y,z,w,FH,d),laneHex);
+      slot(fl.holo,P_.holo(round),round?M4(x,y,z,w,FH,w):M4(x,y,z,w,FH,d),new THREE.Color(laneHex).multiplyScalar(HOLO_DIM));
       if(lane==="parked")slot(fl.tarp,P_.tarp(round),round?M4(x,y,z,w+.4,FH,w+.4):M4(x,y,z,w+.4,FH,d+.4),TARPC)});
     fl.rect={x:(bx0+bx1)/2,z:(bz0+bz1)/2,w:bx1-bx0,d:bz1-bz0,y};
     if(f===0&&!round)slot(fl.clad,P_.solid(),M4(X+rs[0].x,FH*.86,Z+rs[0].z+rs[0].d/2+.22,rs[0].w*.86,.07,.44),K.awning);
@@ -416,13 +442,13 @@ function makeBuilding(p,lot,atlasCell,SB){
   const rt=topY,TW=top.w,TD=top.d,cx=top.x,cz=top.z;let roofH=.6;
   const R_=(P,m,c)=>slot(b.tog.roof,P,m,c);
   if(p.kind==="making"){for(let i=0;i<3;i++)R_(P_.tooth(),M4(cx-TW/2+TW/3*(i+.5),rt,cz,TW/3,1,TD*.92),trim);
-    R_(P_.cyl(),M4(cx+TW/2-.4,rt+1.2,cz+TD/2-.4,.4,2.4,.4),0x3a2f5c);R_(P_.torus(),M4(cx+TW/2-.4,rt+2.42,cz+TD/2-.4,.45,1,.45),NEON[K.edge]);roofH=2.5}
-  else if(p.kind==="hardware"){R_(P_.glow(),M4(cx-TW/4,rt+1.4,cz-TD/4,.08,2.8,.08),NEON[K.edge]);R_(P_.solid(),M4(cx+TW/4,rt+.9,cz-TD/4,.08,1.8,.08),0x6a5a99);
+    R_(P_.cyl(),M4(cx+TW/2-.4,rt+1.2,cz+TD/2-.4,.4,2.4,.4),0x3a2f5c);R_(P_.torus(),M4(cx+TW/2-.4,rt+2.42,cz+TD/2-.4,.45,1,.45),EDGE);roofH=2.5}
+  else if(p.kind==="hardware"){R_(P_.glow(),M4(cx-TW/4,rt+1.4,cz-TD/4,.08,2.8,.08),EDGE);R_(P_.solid(),M4(cx+TW/4,rt+.9,cz-TD/4,.08,1.8,.08),0x6a5a99);
     R_(P_.half(),M4(cx+TW/5,rt+.55,cz+TD/5,1.5,1.5,1.5,K.seed%6,-2.3),0x8d7fc0);R_(P_.solid(),M4(cx+TW/5,rt+.25,cz+TD/5,.2,.5,.2),0x3a2f5c);
-    for(const sx of[-1,1])for(let f=1;f<N;f++){const fr=b.floors[f].rect;slot(b.floors[f].clad,P_.cyl(),M4(fr.x+sx*fr.w*.3,f*FH+FH/2,fr.z+fr.d/2+.12,.2,FH,.2),0x5a3a9a)}roofH=2.8}
+    for(const sx of[-1,1])for(let f=1;f<N;f++){const fr=b.floors[f].rect;slot(b.floors[f].clad,P_.pipe(),M4(fr.x+sx*fr.w*.3,f*FH+FH/2,fr.z+fr.d/2+.12,.2,FH,.2),0x5a3a9a)}roofH=2.8}
   else if(p.kind==="career"){R_(P_.cyl(),M4(cx-TW*.25,rt+.55,cz-TD*.2,.8,1.1,.8),0x4a3f6e);for(const sx of[-1,1])R_(P_.solid(),M4(cx+sx*Math.max(.6,TW*.36),rt+.45,cz+TD*.2,.07,.9,.07),0x3a2f5c);roofH=1.6}
-  else if(p.kind==="athletics"){R_(P_.half(),M4(cx,rt,cz,TW,TW*.7,TW),trim);R_(P_.torus(),M4(cx,rt+.03,cz,TW*1.02,1,TW*1.02),NEON[K.edge]);roofH=TW*.35}
-  else{R_(P_.solid(),M4(cx,rt+.35,cz,TW*.46,.7,TD*.46),trim);R_(P_.glow(),M4(cx,rt+1.9,cz,.1,2.4,.1),NEON[K.edge]);roofH=3.1}
+  else if(p.kind==="athletics"){R_(P_.half(),M4(cx,rt,cz,TW,TW*.7,TW),trim);R_(P_.torus(),M4(cx,rt+.03,cz,TW*1.02,1,TW*1.02),EDGE);roofH=TW*.35}
+  else{R_(P_.solid(),M4(cx,rt+.35,cz,TW*.46,.7,TD*.46),trim);R_(P_.glow(),M4(cx,rt+1.9,cz,.1,2.4,.1),EDGE);roofH=3.1}
   if(!round&&p.kind!=="making")K.props.forEach(q=>{const x=cx+q.u*TW*.6,z=cz+q.v*TD*.6;
     if(q.t==="ac")R_(P_.solid(),M4(x,rt+.22,z,.6,.44,.45,q.r*3),0x7c6fa8);
     else if(q.t==="tank")R_(P_.cyl(),M4(x,rt+.4,z,.55,.8,.55),0x5d4f86);
@@ -434,7 +460,9 @@ function makeBuilding(p,lot,atlasCell,SB){
     cm(P_.glow(),M4(cx,crestY+1.6,cz,.14,3.2,.14),NEON.pink);cm(P_.torus(),M4(cx,crestY+1.1,cz,1.1,1,1.1),C.landed);}
   const crest=crestY+(lane==="landed"?3.4:.4);
   // the status: a glowing ring at the base, a beacon on top, the sign by the door
-  const ringR=Math.max(base.w,base.d)*.72+.25;P_.ring().add(M4(X,.2,Z,ringR,1,ringR),laneHex);
+  const ringR=Math.max(base.w,base.d)*.72+.25;
+  if(lane==="landed"){const RW=P_.ringWide();b.ringSlot=[RW,RW.add(M4(X,.2,Z,ringR+.25,1,ringR+.25),laneHex)];P_.ring().add(M4(X,.21,Z,ringR*.62,1,ringR*.62),laneHex)}
+  else P_.ring().add(M4(X,.2,Z,ringR,1,ringR),laneHex);
   b.beacon=[P_.beacon(),0];b.beacon[1]=b.beacon[0].add(M4(cx,Math.max(crest,topY+.5),cz,.5,.5,.5),laneHex);
   if(zoned)SB.add(X,1.25,Z+LOT/2-.35,0,1.2,.45,atlasCell,laneHex);
   else{const r0=K.rects[0];if(round)SB.add(X,1.7,Z+base.d/2+.15,0,1.1,.42,atlasCell,laneHex);else SB.add(X+r0.x+r0.w/2-.25,1.8,Z+r0.z+r0.d/2+.6,Math.PI/2,1.1,.42,atlasCell,laneHex)}
@@ -463,14 +491,18 @@ function makeBuilding(p,lot,atlasCell,SB){
   b.top=Math.max(crest,b.crane?b.crane.H+.6:0)+.3;b.crestY=crestY;b.ringR=ringR;b.roofTop={x:cx,z:cz,y:crestY};
   return b}
 
+const HOLO_DIM=.26;
+// the blueprint is faint until its building is hovered or selected
+function holoTint(b,full){if(!b||b.holoFull===full)return;b.holoFull=full;_c.set(b.holoHex);if(!full)_c.multiplyScalar(HOLO_DIM);b.floors.forEach(fl=>fl.holo.forEach(([P,i])=>P.setC(i,_c)))}
 function stageOf(b,f,k){if(f<k)return "clad";if(b.p.progress<=0)return "holo";const d=f-k;if(b.p.lane==="parked")return d<4?"tarp":"holo";return d<2?"scaf":d<4?"frame":"holo"}
 function setShown(b,k){b.shown=k;const top=k>=b.N,zoned=b.p.progress<=0;
-  b.floors.forEach((fl,f)=>{const st=stageOf(b,f,k);for(const g of["clad","scaf","frame","holo","tarp"])for(const[P,i]of fl[g])P.set(i,g===st)});
+  // the green net only on the top floor of scaffold, so the site reads clearly
+  b.floors.forEach((fl,f)=>{const st=stageOf(b,f,k);for(const g of["clad","scaf","frame","holo","tarp"])for(const[P,i]of fl[g])P.set(i,g===st);for(const[P,i]of fl.net)P.set(i,st==="scaf"&&(f===k+1||f===b.N-1))});
   b.tog.roof.forEach(([P,i])=>P.set(i,top));b.tog.found.forEach(([P,i])=>P.set(i,!zoned));
   b.tog.props.forEach(([P,i])=>P.set(i,!top));b.tog.trees.forEach(([P,i])=>P.set(i,top));
   b.tog.crane.forEach(([P,i])=>P.set(i,!top));if(b.crane)b.crane.on=!top;
   if(b.tog.crown.length)setCrown(b,top&&!b.holdCrown?1:0)}
-function setCrown(b,g){b.crownG=g;const ry=b.crestY;b.crownSlots.forEach(([P,i,m])=>{if(g<=.001){P.set(i,false);return}P.list[i].on=true;
+function setCrown(b,g){b.crownG=g;const ry=b.crestY;b.crownSlots.forEach(([P,i,m])=>{if(g<=.001){P.set(i,false);return}P.set(i,true);
   _m.makeTranslation(0,ry,0).multiply(new THREE.Matrix4().makeScale(1,g,1)).multiply(new THREE.Matrix4().makeTranslation(0,-ry,0)).multiply(m);P.setM(i,g>=1?m:_m)})}
 
 // a closed loop over the roads: a square with rounded corners, half-size `half`, at height h
@@ -481,22 +513,41 @@ class LoopCurve extends THREE.Curve{constructor(half,h,r){super();this.half=half
       if(d<=qa){const th=a+d/r,cx=(H-r)*ca-(s/2)*sa,cz=(H-r)*sa+(s/2)*ca;return o.set(cx+r*Math.cos(th),this.h,cz+r*Math.sin(th))}d-=qa}
     return o.set(H,this.h,-s/2)}}
 function monorail(parent,half,h,hex,nCars,speed){const curve=new LoopCurve(half,h,4);
-  parent.add(new THREE.Mesh(new THREE.TubeGeometry(curve,240,.14,5,true),new THREE.MeshBasicMaterial({color:hex})));
+  parent.add(new THREE.Mesh(new THREE.TubeGeometry(curve,160,.14,4,true),new THREE.MeshBasicMaterial({color:hex})));
   const Pp=new Pool(G.box(),lam(),parent);for(let k=0;k<20;k++){const q=curve.getPointAt(k/20);Pp.add(M4(q.x,h/2,q.z,.22,h,.22),0x4a3a7a)}Pp.build();
   for(let c=0;c<nCars;c++){const car=new THREE.Group();const body=new THREE.Mesh(new THREE.BoxGeometry(1.7,.55,.7),new THREE.MeshLambertMaterial({color:0xb9a4ff}));car.add(body);
     const band=new THREE.Mesh(new THREE.BoxGeometry(1.72,.12,.72),new THREE.MeshBasicMaterial({color:hex}));band.position.y=-.12;car.add(band);parent.add(car);trains.push({m:car,curve,u0:c*.016,speed})}}
 
 const SIGN_WORDS=["HOTEL","BAR","RAMEN","24H","ARCADE","MOTEL","SYNTH","NOODLE","CLUB","NEON","DATA","SUSHI"];
-// the order lots are given out: the town square first, then ring by ring, block by block, four lots per block
-function blockOrder(R){const out=[[0,0]];for(let r=1;r<=R;r++){for(let i=-r;i<r;i++)out.push([i,-r]);for(let j=-r;j<r;j++)out.push([r,j]);for(let i=r;i>-r;i--)out.push([i,r]);for(let j=r;j>-r;j--)out.push([-r,j])}return out}
+// The order blocks open and lots are given out: the town square, then ring 1 block by block (as in 2a, where the first
+// projects stand), then ring 2 onward from the middle of each side out to the corners, opposite sides in pairs, so the
+// city grows evenly in every direction. Four lots per block.
+function ringBlocks(r){const out=[];for(let i=-r;i<r;i++)out.push([i,-r]);for(let j=-r;j<r;j++)out.push([r,j]);for(let i=r;i>-r;i--)out.push([i,r]);for(let j=r;j>-r;j--)out.push([-r,j]);return out}
+function blockOrder(R){const out=[[0,0]];
+  for(let r=1;r<=R;r++){let ring=ringBlocks(r);
+    if(r>1){const key=([i,j])=>{const ai=Math.abs(i),aj=Math.abs(j),along=ai===r&&aj===r?r:ai===r?aj:ai;let th=Math.atan2(j,i);if(th<0)th+=2*Math.PI;return[along,+(th%Math.PI).toFixed(5),th]};
+      ring=ring.map(b=>({b,k:key(b)})).sort((a,b)=>a.k[0]-b.k[0]||a.k[1]-b.k[1]||a.k[2]-b.k[2]).map(x=>x.b)}
+    out.push(...ring)}
+  return out}
 const LOT_ORDER=[[0,0],[1,0],[1,1],[0,1]];
 // oldest first: `created`, then name, then note path. No date sorts last (the outer edge)
 const byStart=(a,b)=>((a.created?0:1)-(b.created?0:1))||cmpStr(a.created,b.created)||cmpStr(a.name,b.name)||cmpStr(a.note,b.note);
 function cmpStr(a,b){return a<b?-1:a>b?1:0}
-function planLots(n){let r=1;while(4*((2*r+1)**2-1)<n)r++;const R=r+1;const lots=[];
-  blockOrder(R).forEach(([i,j],bk)=>{const ring=Math.max(Math.abs(i),Math.abs(j));LOT_ORDER.forEach(([li,lj])=>lots.push({i,j,ring,block:bk,corner:Math.abs(i)===R&&Math.abs(j)===R,square:ring===0,
-    x:i*PITCH+(li-.5)*LOT,z:j*PITCH+(lj-.5)*LOT,seed:hashStr(i+","+j+","+li+","+lj),used:null}))});
-  return{R,lots}}
+// The city grows by blocks, with no cap. The square and ring 1 are open from the start. From level 3 each level opens two
+// more blocks. A project that needs a lot in a block not open yet opens that block too (and keeps three zoned lots after it).
+const OPEN_BASE=9,OPEN_PER_LEVEL=2;
+const openByLevel=lv=>OPEN_BASE+OPEN_PER_LEVEL*Math.max(0,lv-2);
+const blockOpenLevel=k=>k<OPEN_BASE?1:2+Math.ceil((k-OPEN_BASE+1)/OPEN_PER_LEVEL);
+function planLots(n,level){const byLevel=openByLevel(level),need=1+Math.ceil((n+3)/4),K=Math.max(byLevel,need);
+  let R=1;while((2*R+1)**2<K)R++;
+  let full=0;for(let r=1;(2*r+1)**2<=K;r++)full=r;
+  const lots=[];let maxRing=0;
+  blockOrder(R).slice(0,K).forEach(([i,j],bk)=>{const ring=Math.max(Math.abs(i),Math.abs(j));maxRing=Math.max(maxRing,ring);const openLv=blockOpenLevel(bk);
+    LOT_ORDER.forEach(([li,lj])=>lots.push({i,j,ring,block:bk,openLv,square:ring===0,
+      x:i*PITCH+(li-.5)*LOT,z:j*PITCH+(lj-.5)*LOT,seed:hashStr(i+","+j+","+li+","+lj),used:null}))});
+  return{R:maxRing,full,lots,blocks:K,byLevel,need}}
+// traffic follows activity: more cars when more projects were updated in the last 7 days
+function carCount(){return Math.min(48,4+3*(STATS.active7||0))}
 
 function buildCity(){
   disposeCity();city=new THREE.Group();scene.add(city);
@@ -504,91 +555,224 @@ function buildCity(){
   const ug=lv=>{if(!unlockGroups[lv]){const g=new THREE.Group();g.userData.level=lv;g.userData.growAt=-1e9;unlockGroups[lv]=g;city.add(g)}return unlockGroups[lv]};
   // placement: projects sorted by start date take the lots in order. Status and progress never move a building
   const order=PROJECTS.slice().sort(byStart);
-  const plan=planLots(order.length);BLOCKS=2*plan.R+1;HALF=BLOCKS*PITCH/2;
+  const plan=planLots(order.length,LEVEL);BLOCKS=2*plan.R+1;HALF=BLOCKS*PITCH/2;
   const lots=plan.lots,free=lots.filter(l=>!l.square);
   order.forEach((p,k)=>{free[k].used=p;free[k].rank=k+1});
-  // city lots: the next three stay zoned for the next projects; the rest fill in with the level, seeded per lot so they never reshuffle
-  const infill={1:Math.min(.95,Math.max(0,(LEVEL-2)*.32)),2:Math.min(.8,Math.max(0,(LEVEL-4)*.25))};
-  free.forEach((l,k)=>{if(l.used)return;if(k<order.length+3){l.used="zoned";return}const r=mulberry(l.seed)();const ring=Math.min(2,l.ring);
-    if(LEVEL>=3&&r>.86){l.used="park";return}if(r<(infill[ring]||0)*(l.ring>2?.6:1))l.used="fill";else if(l.ring>=2&&r<(infill[2]||0)+.15)l.used="rubble";else l.used="zoned"});
-  // the street: blocks with sidewalks, lot pads, roads, lane marks and crosswalks (merged, a few draw calls)
-  const MW=merger(),MR=merger(),MK=merger();
-  const ext=HALF+ROAD/2;MR.box(0,-.02,0,2*ext+ROAD,.04,2*ext+ROAD,0x120b24);
+  // city lots: the next three stay zoned for the next projects. Ring 1 fills in with the level. A newer block opens as
+  // empty lots and rubble and fills in over the levels after it opened. Seeded per lot, so nothing reshuffles.
+  free.forEach((l,k)=>{if(l.used)return;if(k<order.length+3){l.used="zoned";return}const r=mulberry(l.seed)();
+    if(LEVEL>=3&&r>.86){l.used="park";return}
+    const age=LEVEL-l.openLv,share=l.ring===1?Math.min(.95,Math.max(0,(LEVEL-2)*.32)):age<0?0:Math.min(.85,.25+.2*age);
+    if(r<share)l.used="fill";else if(l.ring>=2&&r<share+.18)l.used="rubble";else l.used="zoned"});
+  // the street: blocks with sidewalks and lot pads, and roads round every open block (merged, a few draw calls)
+  const MW=merger(),MR=merger(),MK=merger(),ME=merger();
   const blocks=new Map();lots.forEach(l=>blocks.set(l.i+","+l.j,l));
   blocks.forEach(l=>{const bx=l.i*PITCH,bz=l.j*PITCH;MW.box(bx,.08,bz,BLOCK,.16,BLOCK,0x2b2152);
     MW.box(bx,.165,bz,2*LOT,.02,2*LOT,l.square?0x2d2458:0x1b1436)});
   lots.forEach(l=>{if(l.used==="park")MW.box(l.x,.18,l.z,LOT-.3,.04,LOT-.3,0x0f4a34)});
-  const R=plan.R,ends=[];for(let k=-R;k<=R+1;k++)ends.push((k-.5)*PITCH);
-  let marks=0,walks=0;
-  ends.forEach(c=>{for(let k=-R;k<=R;k++){const a=k*PITCH-BLOCK/2+.9,b=k*PITCH+BLOCK/2-.9;for(let u=a;u<b;u+=1.6){MK.quad(c,.012,u+.4,.12,.7,0x7a5cc4);MK.quad(u+.4,.012,c,.7,.12,0x7a5cc4);marks+=2}}});
-  // crosswalks on the inner intersections only, on the two sides facing the town square
-  ends.forEach(cx=>ends.forEach(cz=>{if(Math.abs(cx)>=HALF-1||Math.abs(cz)>=HALF-1)return;for(const[dx,dz,rot]of[[0,-Math.sign(cz)||1,0],[-Math.sign(cx)||1,0,1]]){const ox=cx+dx*(ROAD/2+.55),oz=cz+dz*(ROAD/2+.55);
-    for(let s=-1.05;s<=1.06;s+=.7){if(rot)MK.quad(ox,.013,oz+s,.9,.3,0x9d8bc4);else MK.quad(ox+s,.013,oz,.3,.9,0x9d8bc4)}walks++}}));
-  city.add(MR.mesh(false));city.add(MW.mesh(true));city.add(MK.mesh(false));STREET={blocks:blocks.size,marks,crosswalks:walks,roads:ends.length*2};
-  // the town square: a paved plaza with a neon obelisk (Mission Control HQ goes here in 2b)
-  P_.solid().add(M4(0,.4,0,1.2,.5,1.2),0x3a2f6a);P_.glow().add(M4(0,2.4,0,.35,3.6,.35),NEON.cyan);P_.ring().add(M4(0,.2,0,2.6,1,2.6),NEON.pink);
-  for(let i=0;i<8;i++){const a=i/8*Math.PI*2+.3,r=LOT*.78;P_.tree().add(M4(Math.cos(a)*r,.75,Math.sin(a)*r,.8,.9,.8),0x3ddc97)}
+  // road edges: h = along x on z-line `line`, v = along z on x-line `line`. Grid line k sits at (k - .5) * PITCH
+  const edges=new Map(),nodes=new Map();
+  const arm=(lx,lz,d)=>{const k=lx+"|"+lz;let n=nodes.get(k);if(!n){n={lx,lz,arms:new Set()};nodes.set(k,n)}n.arms.add(d)};
+  blocks.forEach(({i,j})=>{for(const[o,line,cell]of[["h",j,i],["h",j+1,i],["v",i,j],["v",i+1,j]]){const k=o+"|"+line+"|"+cell;if(!edges.has(k))edges.set(k,{o,line,cell})}});
+  edges.forEach(e=>{if(e.o==="h"){arm(e.cell,e.line,"E");arm(e.cell+1,e.line,"W")}else{arm(e.line,e.cell,"S");arm(e.line,e.cell+1,"N")}});
+  // roads upgrade with the level: plain (1), lane marks and crosswalks (3), neon edges (6)
+  const tier=LEVEL>=6?3:LEVEL>=3?2:1;let marks=0,walks=0,neon=0;
+  edges.forEach(e=>{const c=(e.line-.5)*PITCH,u0=e.cell*PITCH,H_=e.o==="h";
+    if(H_)MR.quad(u0,.004,c,PITCH+ROAD,ROAD,0x120b24);else MR.quad(c,.004,u0,ROAD,PITCH+ROAD,0x120b24);
+    if(tier>=2){const a=u0-BLOCK/2+.9,b=u0+BLOCK/2-.9;for(let u=a;u<b;u+=1.6){if(H_)MK.quad(u+.4,.012,c,.7,.12,0x7a5cc4);else MK.quad(c,.012,u+.4,.12,.7,0x7a5cc4);marks++}}
+    if(tier>=3)for(const sd of[-1,1]){const off=c+sd*(ROAD/2-.07),hex=H_?0xff3cac:0x2cf4ff;if(H_)ME.quad(u0,.016,off,BLOCK,.1,hex);else ME.quad(off,.016,u0,.1,BLOCK,hex);neon++}});
+  // crosswalks on full crossings, on the two sides facing the town square
+  if(tier>=2)nodes.forEach(n=>{if(n.arms.size<4)return;const cx=(n.lx-.5)*PITCH,cz=(n.lz-.5)*PITCH;
+    for(const[dx,dz,rot]of[[0,-Math.sign(cz)||1,0],[-Math.sign(cx)||1,0,1]]){const ox=cx+dx*(ROAD/2+.55),oz=cz+dz*(ROAD/2+.55);
+      for(let s=-1.05;s<=1.06;s+=.7){if(rot)MK.quad(ox,.013,oz+s,.9,.3,0x9d8bc4);else MK.quad(ox+s,.013,oz,.3,.9,0x9d8bc4)}walks++}});
+  city.add(MR.mesh(false));city.add(MW.mesh(true));if(MK.n())ug(3).add(MK.mesh(false));if(ME.n())ug(6).add(ME.mesh(false));
+  STREET={blocks:blocks.size,byLevel:plan.byLevel,need:plan.need,ring:plan.R,fullRing:plan.full,roads:edges.size,nodes:nodes.size,tier,marks,crosswalks:walks,neonEdges:neon,
+    onRoad:[...blocks.values()].every(l=>["h|"+l.j+"|"+l.i,"h|"+(l.j+1)+"|"+l.i,"v|"+l.i+"|"+l.j,"v|"+(l.i+1)+"|"+l.j].every(k=>edges.has(k)))};
   // the buildings
-  const words=[...new Set(order.map(p=>p.code))];const atlas=signAtlas(words.concat(SIGN_WORDS));const SB=signBatch(atlas);
+  const words=[...new Set(order.map(p=>p.code))];const atlas=signAtlas(words.concat(SIGN_WORDS,["HQ"]));const SB=signBatch(atlas);
   lots.forEach(l=>{
     if(l.used&&l.used.id){const p=l.used,b=makeBuilding(p,l,words.indexOf(p.code),SB);buildings.push(b);
       const lbl=document.createElement("div");lbl.className="lbl";lbl.textContent=p.code;host.appendChild(lbl);labels.push({el:lbl,b,txt:p.code,on:false,w:0,h:0})}
-    else if(l.used==="fill"){const r=mulberry(l.seed),fl=l.ring===1?2+Math.floor(r()*5):1+Math.floor(r()*3),fw=2.2+r()*1.4,fd=2.2+r()*1.4,x=l.x+(r()-.5)*.6,z=l.z+(r()-.5)*.6,pal=WALLS[Math.floor(r()*WALLS.length)];
+    // infill: taller near the centre; ring 4 and out are low-rise outskirts (one or two floors), which keeps a big city light
+    else if(l.used==="fill"){const r=mulberry(l.seed),fl=l.ring===1?2+Math.floor(r()*5):l.ring>=4?1+Math.floor(r()*2):1+Math.floor(r()*(2+Math.min(3,LEVEL-l.openLv))),fw=2.2+r()*1.4,fd=2.2+r()*1.4,x=l.x+(r()-.5)*.6,z=l.z+(r()-.5)*.6,pal=WALLS[Math.floor(r()*WALLS.length)];
       const wc=new THREE.Color(pal[0]).lerp(new THREE.Color(0x1a1236),.45),style=r()<.5?"grid":"band";
-      for(let f=0;f<fl;f++)P_.facade(f===0?"shop":style,f===0?NEON.amber:NEON.lav,true,false).add(M4(x,f*1.3+.65,z,fw,1.3,fd),wc);
-      const ry=fl*1.3;if(r()<.6)P_.solid().add(M4(x+(r()-.5)*fw*.4,ry+.2,z+(r()-.5)*fd*.4,.55,.4,.45),0x6a5f92);
+      for(let f=0;f<fl;f++)P_.facade(f===0?"shop":style,f===0?NEON.amber:NEON.lav,"infill",false).add(M4(x,f*1.3+.65,z,fw,1.3,fd),wc);
+      const ry=fl*1.3;if(r()<.6&&l.ring<4)P_.solid().add(M4(x+(r()-.5)*fw*.4,ry+.2,z+(r()-.5)*fd*.4,.55,.4,.45),0x6a5f92);
       l.roof={x,z,y:ry,fw,fd}}
-    else if(l.used==="park"){for(let t=0;t<5;t++){const r=mulberry(l.seed+t);P_.tree().add(M4(l.x+(r()-.5)*3.2,.7,l.z+(r()-.5)*3.2,.8,.9,.8),0x3ddc97)}}
-    else if(l.used==="rubble"){const r=mulberry(l.seed);for(let t=0;t<3;t++)P_.solid().add(M4(l.x+(r()-.5)*2.6,.3,l.z+(r()-.5)*2.6,.6+r(),.25+r()*.35,.6+r(),r()*3),0x241a44)}
+    else if(l.used==="park"){for(let t=0;t<(l.ring>=4?2:4);t++){const r=mulberry(l.seed+t);P_.tree().add(M4(l.x+(r()-.5)*3.2,.7,l.z+(r()-.5)*3.2,.8,.9,.8),0x3ddc97)}}
+    else if(l.used==="rubble"){const r=mulberry(l.seed);for(let t=0;t<(l.ring>=4?2:3);t++)P_.solid().add(M4(l.x+(r()-.5)*2.6,.3,l.z+(r()-.5)*2.6,.6+r(),.25+r()*.35,.6+r(),r()*3),0x241a44)}
     else if(l.used==="zoned"){P_.solid().add(M4(l.x,.2,l.z,LOT-.5,.03,LOT-.5),0x231a46)}});
+  // the town square: Mission Control HQ, its board, and the monuments
+  buildSquare(ug,SB,words.length+SIGN_WORDS.length);
   const signs=SB.mesh();city.add(signs);
-  // streetlights by level: ring r lit when LEVEL >= r+2, the far corners at 7
-  const lights={};blocks.forEach(l=>{const litLevel=l.corner?7:Math.min(l.ring,2)+2;if(LEVEL<litLevel)return;const g=ug(litLevel);
-    const I=lights[litLevel]||(lights[litLevel]={pole:new Pool(G.box(),lam(),g),lamp:new Pool(G.sphere(),bas(),g)});
-    for(const[sx,sz]of[[-1,-1],[1,-1],[1,1],[-1,1]]){const x=l.i*PITCH+sx*(BLOCK/2-.3),z=l.j*PITCH+sz*(BLOCK/2-.3);I.pole.add(M4(x,1.2,z,.08,2.2,.08),0x4a3a7a);I.lamp.add(M4(x,2.35,z,.26,.26,.26),0xffd166)}});
+  // streetlights by level: the square at 2, ring 1 at 3, every other block at 7
+  const lights={};blocks.forEach(l=>{const litLevel=l.ring===0?2:l.ring===1?3:7;if(LEVEL<litLevel)return;const g=ug(litLevel);
+    const I=lights[litLevel]||(lights[litLevel]={pole:new Pool(sidesBox,lam(),g),lamp:new Pool(G.box(),bas(),g)});
+    for(const[sx,sz]of l.ring>=4?[[1,1]]:l.ring>=3?[[-1,-1],[1,1]]:[[-1,-1],[1,-1],[1,1],[-1,1]]){const x=l.i*PITCH+sx*(BLOCK/2-.3),z=l.j*PITCH+sz*(BLOCK/2-.3);I.pole.add(M4(x,1.2,z,.08,2.2,.08),0x4a3a7a);I.lamp.add(M4(x,2.35,z,.24,.2,.24),0xffd166)}});
   Object.values(lights).forEach(I=>{I.pole.build();I.lamp.build()});
-  // level 4: monorail over the road between ring 1 and ring 2. Level 8: a second one on the outer road
+  // level 4: monorail over the road between ring 1 and ring 2. Level 8: a second one on the outer road of ring 2 (later the outermost full ring)
   if(LEVEL>=4)monorail(ug(4),1.5*PITCH,9.4,0xff3cac,3,.03);
   // level 5: holo billboards on infill roofs
   if(LEVEL>=5){const G5=ug(5),BB=signBatch(atlas),PP=new Pool(G.box(),lam(),G5);const cols=[0xff3cac,0x2cf4ff,0xffd166];
     lots.forEach(l=>{if(!l.roof||rnd2()>.5)return;const r=l.roof,hex=cols[Math.floor(rnd2()*3)],yaw=Math.floor(rnd2()*4)*Math.PI/2;
       BB.add(r.x,r.y+1.35,r.z,yaw,2.3,.86,words.length+Math.floor(rnd2()*SIGN_WORDS.length),hex);for(const sx of[-.8,.8])PP.add(M4(r.x+Math.cos(yaw)*sx,r.y+.45,r.z-Math.sin(yaw)*sx,.07,.9,.07),0x3a2a66)});
     if(BB.n()){const m=BB.mesh();G5.add(m);blinkers.push({m,kind:"flicker",ph:rnd2()*9})}PP.build()}
-  // level 6: skyline towers in a square band just outside the city, never a circle
-  if(LEVEL>=6){const G6=ug(6),FP=new Pool(G.box(),facadeMat("grid",NEON.lav,true,false),G6),TP=new Pool(G.sphere(),bas(),G6);
-    const edge=HALF+ROAD+3;for(let side=0;side<4;side++)for(let s=-edge;s<edge;s+=6.2){if(rnd2()<.25)continue;const out=edge+2+rnd2()*6,u=s+rnd2()*2,h=5+rnd2()*10,w=2.6+rnd2()*1.8;
-      const a=side*Math.PI/2,x=Math.cos(a)*out-Math.sin(a)*u,z=Math.sin(a)*out+Math.cos(a)*u,fl=Math.round(h/1.3),c=new THREE.Color(WALLS[Math.floor(rnd2()*WALLS.length)][0]).lerp(new THREE.Color(0x0e0820),.6);
-      for(let f=0;f<fl;f++)FP.add(M4(x,f*1.3+.65,z,w,1.3,w),c);TP.add(M4(x,fl*1.3+.4,z,.5,.5,.5),0xff4d6d)}
-    FP.build();TP.build();if(TP.mesh)blinkers.push({m:TP.mesh,kind:"blink",ph:0})}
-  if(LEVEL>=8)monorail(ug(8),(plan.R+.5)*PITCH,13,0x2cf4ff,2,-.02);
+  if(LEVEL>=8)monorail(ug(8),(Math.max(2,plan.full)+.5)*PITCH,13,0x2cf4ff,2,-.02);
   // level 9: flying traffic
-  if(LEVEL>=9){const G9=ug(9);for(let i=0;i<10;i++){const horiz=i%2===0,y=20+rnd2()*10,c=(rnd2()-.5)*60;const m=new THREE.Mesh(new THREE.BoxGeometry(horiz?1:.4,.25,horiz?.4:1),new THREE.MeshBasicMaterial({color:i%3?0x2cf4ff:0xffd166}));if(horiz)m.position.set((rnd2()-.5)*140,y,c);else m.position.set(c,y,(rnd2()-.5)*140);G9.add(m);fliers.push({m,horiz,v:(rnd2()<.5?-1:1)*(9+rnd2()*7)})}}
-  // level 10: searchlights sweep the sky from the town square
-  if(LEVEL>=10){const G10=ug(10);[[1,1],[-1,1],[-1,-1],[1,-1]].forEach(([sx,sz],i)=>{const g=new THREE.ConeGeometry(3.2,70,20,1,true);g.translate(0,-35,0);g.rotateX(Math.PI);
+  if(LEVEL>=9){const G9=ug(9),span=HALF+30;for(let i=0;i<10;i++){const horiz=i%2===0,y=20+rnd2()*10,c=(rnd2()-.5)*HALF*1.4;const m=new THREE.Mesh(new THREE.BoxGeometry(horiz?1:.4,.25,horiz?.4:1),new THREE.MeshBasicMaterial({color:i%3?0x2cf4ff:0xffd166}));if(horiz)m.position.set((rnd2()-.5)*2*span,y,c);else m.position.set(c,y,(rnd2()-.5)*2*span);G9.add(m);fliers.push({m,horiz,span,v:(rnd2()<.5?-1:1)*(9+rnd2()*7)})}}
+  // level 10: searchlights sweep the sky from the HQ roof
+  if(LEVEL>=10){const G10=ug(10),hw=HQ.half*.8;[[1,1],[-1,1],[-1,-1],[1,-1]].forEach(([sx,sz],i)=>{const g=new THREE.ConeGeometry(3.2,70,20,1,true);g.translate(0,-35,0);g.rotateX(Math.PI);
     const cone=new THREE.Mesh(g,new THREE.MeshBasicMaterial({color:i%2?0x2cf4ff:0xffd166,transparent:true,opacity:.11,depthWrite:false,side:THREE.DoubleSide,blending:THREE.AdditiveBlending,fog:false}));
-    const piv=new THREE.Group();piv.position.set(sx*LOT*.9,0,sz*LOT*.9);piv.add(cone);G10.add(piv);searchlights.push({piv,ph:i*1.7})})}
-  // traffic: cars with headlights and tail lights, two lanes per road
+    const piv=new THREE.Group();piv.position.set(sx*hw,HQ.roofY,sz*hw);piv.add(cone);G10.add(piv);searchlights.push({piv,ph:i*1.7})})}
+  // traffic: cars with headlights and tail lights on straight runs of road, two lanes each. The count follows activity
+  const runs=[];
+  for(const o of["h","v"]){const byLine=new Map();edges.forEach(e=>{if(e.o!==o)return;if(!byLine.has(e.line))byLine.set(e.line,[]);byLine.get(e.line).push(e.cell)});
+    [...byLine.keys()].sort((a,b)=>a-b).forEach(line=>{const cells=byLine.get(line).sort((a,b)=>a-b);let a=cells[0],prev=a;
+      for(const c of cells.slice(1).concat([Infinity])){if(c!==prev+1){runs.push({horiz:o==="h",c:(line-.5)*PITCH,s0:(a-.5)*PITCH-ROAD/2,s1:(prev+.5)*PITCH+ROAD/2});a=c}prev=c}})}
+  const total=runs.reduce((s,r)=>s+r.s1-r.s0,0);
   const CB=P_.solid(),CH=pool("carlight",G.box,bas),CG=pool("carglow",()=>{const g=new THREE.PlaneGeometry(1,1);g.rotateX(-Math.PI/2);return g},()=>new THREE.MeshBasicMaterial({color:0xffffff,transparent:true,opacity:.22,depthWrite:false,blending:THREE.AdditiveBlending}));
-  const rc=mulberry(777),carCols=[0xd2488f,0x3d63c4,0x6d52cf,0xb9a4ff,0x8a5a46,0x2cf4ff];
-  for(let i=0;i<26;i++){const horiz=rc()<.5,road=ends[Math.floor(rc()*ends.length)],dir=rc()<.5?1:-1,lane=road+dir*ROAD/4*(horiz?1:-1),col=carCols[Math.floor(rc()*carCols.length)];
-    const car={horiz,lane,dir,s:(rc()-.5)*2*ext,v:(3.5+rc()*3.5),parts:[]};
+  const rc=mulberry(777),carCols=[0xd2488f,0x3d63c4,0x6d52cf,0xb9a4ff,0x8a5a46,0x2cf4ff],nCars=carCount();
+  for(let i=0;i<nCars;i++){let pickL=rc()*total,run=runs[0];for(const r of runs){run=r;pickL-=r.s1-r.s0;if(pickL<=0)break}
+    const dir=rc()<.5?1:-1,lane=run.c+dir*ROAD/4*(run.horiz?1:-1),col=carCols[Math.floor(rc()*carCols.length)];
+    const car={horiz:run.horiz,lane,dir,s0:run.s0,s1:run.s1,s:run.s0+rc()*(run.s1-run.s0),v:(3.5+rc()*3.5),parts:[]};
     const pt=(P,lx,ly,lz,sx,sy,sz,c)=>car.parts.push({P,i:P.add(ZERO,c,true),l:M4(lx,ly,lz,sx,sy,sz)});
     pt(CB,0,.26,0,1.05,.3,.52,col);pt(CB,-.08,.5,0,.55,.22,.44,0x1d1640);
     pt(CH,.53,.27,.16,.04,.08,.1,0xfff3b0);pt(CH,.53,.27,-.16,.04,.08,.1,0xfff3b0);pt(CH,-.53,.27,.16,.04,.07,.1,0xff3355);pt(CH,-.53,.27,-.16,.04,.07,.1,0xff3355);
     pt(CG,1.3,.03,0,1.6,1,.7,0xfff3b0);cars.push(car)}
-  STREET.cars=cars.length;STREET.carLights=cars.length*4;
+  STREET.cars=cars.length;STREET.carLights=cars.length*4;STREET.runs=runs.length;STREET.active7=STATS.active7||0;
   poolList.forEach(p=>p.build());
   buildings.forEach(b=>setShown(b,b.shown));moveCars(0);poolList.forEach(p=>p.flush());
-  // shared effects: the selection and hover rings, the floor flash, the landing burst and beam
+  // shared effects: the selection and hover rings, the spotlight, the floor flash, the landing burst and beam
   const fx=(geo,mat)=>{const m=new THREE.Mesh(geo,mat);m.visible=false;city.add(m);return m};
   FX.sel=fx(G.ring(),new THREE.MeshBasicMaterial({color:0xff3cac,transparent:true,opacity:0,depthWrite:false,side:THREE.DoubleSide}));
   FX.hov=fx(G.ring(),new THREE.MeshBasicMaterial({color:0xff3cac,transparent:true,opacity:0,depthWrite:false,side:THREE.DoubleSide}));
+  FX.spot=fx(spotGeo(),new THREE.MeshBasicMaterial({vertexColors:true,transparent:true,opacity:.5,depthWrite:false,side:THREE.DoubleSide,blending:THREE.AdditiveBlending,fog:false}));
+  FX.pool=fx(new THREE.CircleGeometry(1,32).rotateX(-Math.PI/2),new THREE.MeshBasicMaterial({color:0xfff1c9,transparent:true,opacity:.22,depthWrite:false,blending:THREE.AdditiveBlending}));
   FX.flash=fx(new THREE.BoxGeometry(1,1,1),new THREE.MeshBasicMaterial({color:0xffffff,transparent:true,opacity:0,depthWrite:false,blending:THREE.AdditiveBlending}));
   FX.burst=fx(G.ring(),new THREE.MeshBasicMaterial({color:C.landed,transparent:true,opacity:0,depthWrite:false,side:THREE.DoubleSide,blending:THREE.AdditiveBlending}));
   FX.beam=fx(new THREE.CylinderGeometry(.35,1.1,60,16,1,true),new THREE.MeshBasicMaterial({color:C.landed,transparent:true,opacity:0,depthWrite:false,side:THREE.DoubleSide,blending:THREE.AdditiveBlending,fog:false}));
   fitView();
 }
 const FX={};
+// the spotlight on the selected building: an open cone, bright at the top and fading toward the street
+function spotGeo(){const g=new THREE.CylinderGeometry(.08,1,1,28,1,true);g.translate(0,.5,0);const pos=g.attributes.position,col=[];
+  for(let i=0;i<pos.count;i++){const k=pos.getY(i)>.5?.55:.07;col.push(k,k*.95,k*.8)}g.setAttribute("color",new THREE.Float32BufferAttribute(col,3));return g}
+
+// ---------- the town square: Mission Control HQ (grows each level), the town board, the monuments ----------
+const HQ={floors:0,parts:[],roofY:0,half:2,board:null,boardText:""};
+const BOARD={canvas:null,ctx:null,tex:null};
+const ROCKET={g:null,flame:null,smoke:[],phase:"none",t0:0,next:0,launches:0,padY:0};
+function buildSquare(ug,SB,hqCell){
+  const hqFloors=Math.min(18,3+LEVEL),FH=1.2,base=.18,podH=1.4,parts=["podium","tower","dish","board"];
+  const W0=3.6,W1=2.8,setAt=hqFloors>=6?Math.ceil(hqFloors*.6):hqFloors;
+  // podium and tower: always lit, the dashboard's own building
+  P_.facade("shop",NEON.cyan,"lit",false).add(M4(0,base+podH/2,0,4.6,podH,4.6),0x45308e);
+  P_.solid().add(M4(0,base+podH+.06,0,4.8,.12,4.8),0x6d52cf);
+  let y=base+podH+.12;
+  for(let f=0;f<hqFloors;f++){const w=f<setAt?W0:W1;P_.facade("glass",NEON.cyan,"lit",false).add(M4(0,y+FH/2,0,w,FH,w),0x22377c);y+=FH}
+  const roofY=y,topW=hqFloors>=6?W1:W0;HQ.half=topW/2;
+  P_.solid().add(M4(0,roofY+.12,0,topW+.2,.24,topW+.2),0x3d63c4);
+  SB.add(0,base+podH*.55,2.32,0,2.2,.8,hqCell,NEON.cyan);SB.add(0,base+podH*.55,-2.32,Math.PI,2.2,.8,hqCell,NEON.cyan);
+  // level 1: a dish on the roof
+  P_.half().add(M4(-topW*.22,roofY+.7,-topW*.22,1.3,1.3,1.3,.8,-2.2),0x8d7fc0);P_.solid().add(M4(-topW*.22,roofY+.4,-topW*.22,.18,.5,.18),0x3a2f5c);
+  const hp=(lv,kind)=>pool("hq"+kind+lv,kind==="glow"?G.box:kind==="torus"?G.torus:kind==="cone"?G.cone:kind==="half"?G.half:G.box,kind==="glow"||kind==="torus"||kind==="cone"?bas:lam,ug(lv));
+  // level 2: pink neon up the tower corners
+  if(LEVEL>=2){parts.push("neon corners");const Pg=hp(2,"glow");for(const[sx,sz]of[[-1,-1],[1,-1],[1,1],[-1,1]]){
+    const h0=setAt*FH,y0=base+podH+.12;Pg.add(M4(sx*(W0/2+.03),y0+h0/2,sz*(W0/2+.03),.1,h0,.1),NEON.pink);
+    if(setAt<hqFloors){const h1=(hqFloors-setAt)*FH;Pg.add(M4(sx*(W1/2+.03),y0+h0+h1/2,sz*(W1/2+.03),.1,h1,.1),NEON.pink)}}}
+  // level 4: two side wings with their own floors
+  if(LEVEL>=4){parts.push("wings");const Pw=pool("hqwing4",G.box,()=>facadeMat("grid",NEON.pink,"lit",false),ug(4));
+    for(const sx of[-1,1])for(let f=0;f<3;f++)Pw.add(M4(sx*3.1,base+.65+f*1.3,0,1.4,1.3,2.4),0x5b2066)}
+  // level 5: an observation ring round the tower
+  if(LEVEL>=5){parts.push("observation ring");const oy=base+podH+.12+Math.round(hqFloors*.66)*FH;hp(5,"torus").add(M4(0,oy,0,W0*1.5,2,W0*1.5),NEON.cyan);hp(5,"box").add(M4(0,oy-.05,0,W0*1.35,.1,W0*1.35),0x2f2a78)}
+  // level 6: a neon edge round the roof
+  if(LEVEL>=6){parts.push("roof neon");const Pg=hp(6,"glow"),e=topW/2+.1;for(const[x,z,w,d]of[[0,e,topW+.3,.08],[0,-e,topW+.3,.08],[e,0,.08,topW+.3],[-e,0,.08,topW+.3]])Pg.add(M4(x,roofY+.26,z,w,.08,d),NEON.cyan)}
+  // level 7: an antenna mast with a blinking red light
+  if(LEVEL>=7){parts.push("antenna");hp(7,"box").add(M4(topW*.25,roofY+2.3,topW*.25,.12,4.4,.12),0x6a5a99);
+    const lamp=new THREE.Mesh(G.sphere(),new THREE.MeshBasicMaterial({color:0xff4d6d}));lamp.position.set(topW*.25,roofY+4.6,topW*.25);lamp.scale.setScalar(.35);ug(7).add(lamp);blinkers.push({m:lamp,kind:"blink",ph:1})}
+  // level 8: a second dish on a wing roof
+  if(LEVEL>=8){parts.push("second dish");hp(8,"half").add(M4(3.1,base+4.4,0,1.1,1.1,1.1,2.4,-2.3),0x8d7fc0)}
+  // level 10: a glowing spire on top
+  if(LEVEL>=10){parts.push("spire");hp(10,"cone").add(M4(-topW*.2,roofY+1.6,topW*.2,.5,3,.5),NEON.cyan)}
+  // the town board on a mast above the roof. It turns to face you and shows the selected project, then the city
+  const bw=8.4,bh=4.2,by=roofY+1.4+bh/2;
+  P_.solid().add(M4(0,roofY+.7,0,.25,1.4,.25),0x3a2f5c);
+  if(!BOARD.canvas){BOARD.canvas=document.createElement("canvas");BOARD.canvas.width=1024;BOARD.canvas.height=512;BOARD.ctx=BOARD.canvas.getContext("2d");BOARD.tex=new THREE.CanvasTexture(BOARD.canvas);BOARD.tex.anisotropy=4;BOARD.tex.userData={keep:true}}
+  const board=new THREE.Mesh(new THREE.PlaneGeometry(bw,bh),new THREE.MeshBasicMaterial({map:BOARD.tex,transparent:true,side:THREE.DoubleSide,fog:false}));
+  board.position.set(0,by,0);city.add(board);HQ.board=board;
+  Object.assign(HQ,{floors:hqFloors,parts,roofY,top:by+bh/2});
+  // the square: lamps and a few trees in the free corners
+  const L=STATS.landed||0,C4=3.65;
+  // 5 landed: a plaza with a statue (left corner from the default view)
+  if(L>=5){const x=C4,z=-C4;
+    P_.cyl().add(M4(x,base+.03,z,2.7,.06,2.7),0x3a2f6a);P_.torus().add(M4(x,base+.08,z,2.7,1,2.7),0xffe27a);
+    P_.solid().add(M4(x,base+.45,z,.8,.8,.8),0x5d4f86);const S=0xe0b050,sy=base+.85;
+    P_.solid().add(M4(x-.1,sy+.3,z,.14,.6,.16),S);P_.solid().add(M4(x+.1,sy+.3,z,.14,.6,.16),S);P_.solid().add(M4(x,sy+.85,z,.44,.55,.24),S);
+    P_.tree().add(M4(x,sy+1.32,z,.36,.36,.36),S);P_.solid().add(M4(x+.32,sy+1.3,z,.12,.62,.12,0,0,-.35),S);P_.solid().add(M4(x-.26,sy+.8,z,.1,.5,.1,0,0,.2),S);
+    P_.beacon().add(M4(x+.43,sy+1.7,z,.3,.3,.3),0xffe27a);
+    for(const[a,b]of[[-1,-1],[1,-1],[1,1],[-1,1]])P_.glow().add(M4(x+a*1.05,base+.3,z+b*1.05,.12,.6,.12),0xffd166)}
+  else for(let t=0;t<3;t++)P_.tree().add(M4(C4+(t-1)*.9,.75,-C4+(t%2?.6:-.4),.8,.9,.8),0x3ddc97);
+  // 10 landed: a launch pad with a gantry (right corner). 25 landed: a rocket stands on it and launches
+  ROCKET.g=null;ROCKET.phase="none";
+  if(L>=10){const x=-C4,z=C4,py=base+.3;
+    P_.solid().add(M4(x,base+.15,z,2.8,.3,2.8),0x3a3550);
+    for(const s of[-1,1]){P_.tape().add(M4(x,py+.01,z+s*1.36,2.8,.02,.1));P_.tape().add(M4(x+s*1.36,py+.01,z,.1,.02,2.8,0))}
+    P_.glow().add(M4(x,py+.02,z,1.1,.02,1.1),0xff8a3d);
+    const gx=x-1.05,gz=z-1.05;P_.solid().add(M4(gx,py+3.6,gz,.4,7.2,.4),STEEL);
+    for(let k=1;k<=4;k++)P_.solid().add(M4(gx+.45,py+k*1.6,gz+.45,.9,.08,.08,Math.PI/4),STEEL);
+    P_.beacon().add(M4(gx,py+7.45,gz,.32,.32,.32),0xff4d6d);
+    ROCKET.padY=py;ROCKET.x=x;ROCKET.z=z;
+    if(L>=25)makeRocket(x,py,z)}
+  else for(let t=0;t<3;t++)P_.tree().add(M4(-C4+(t%2?.6:-.4),.75,C4+(t-1)*.9,.8,.9,.8),0x3ddc97);
+  // the front and back corners: small gardens
+  for(const[x,z]of[[C4,C4],[-C4,-C4]]){P_.solid().add(M4(x,base+.04,z,2.2,.08,2.2),0x1f6b4a);for(let t=0;t<3;t++){const a=t*2.1+.5;P_.tree().add(M4(x+Math.cos(a)*.6,.8,z+Math.sin(a)*.6,.75,.85,.75),0x3ddc97)}}
+  MONUMENT={plaza:L>=5,pad:L>=10,rocket:L>=25,landed:L};
+  drawBoard()}
+let MONUMENT={plaza:false,pad:false,rocket:false,landed:0};
+function makeRocket(x,py,z){const g=new THREE.Group();g.position.set(x,py,z);
+  const body=new THREE.Mesh(new THREE.CylinderGeometry(.42,.48,4.2,10),new THREE.MeshLambertMaterial({color:0xe8e0ff}));body.position.y=2.3;g.add(body);
+  const nose=new THREE.Mesh(new THREE.ConeGeometry(.42,1.3,10),new THREE.MeshLambertMaterial({color:0xff3cac}));nose.position.y=5.05;g.add(nose);
+  const band=new THREE.Mesh(new THREE.CylinderGeometry(.44,.44,.18,10),new THREE.MeshBasicMaterial({color:0x2cf4ff}));band.position.y=3.5;g.add(band);
+  const fins=new THREE.Mesh(new THREE.BoxGeometry(1.7,.9,.08),new THREE.MeshLambertMaterial({color:0x6d52cf}));fins.position.y=.65;g.add(fins);
+  const fins2=fins.clone();fins2.rotation.y=Math.PI/2;g.add(fins2);
+  const flame=new THREE.Mesh(new THREE.ConeGeometry(.42,2.4,10,1,true),new THREE.MeshBasicMaterial({color:0xffb347,transparent:true,opacity:.9,depthWrite:false,blending:THREE.AdditiveBlending,fog:false}));
+  flame.rotation.x=Math.PI;flame.position.y=-1.1;flame.visible=false;g.add(flame);city.add(g);
+  const smoke=[];for(let i=0;i<6;i++){const m=new THREE.Mesh(G.sphere(),new THREE.MeshLambertMaterial({color:0xb9a4ff,transparent:true,opacity:.5,depthWrite:false}));m.visible=false;city.add(m);smoke.push({m,a:i/6*Math.PI*2})}
+  Object.assign(ROCKET,{g,flame,smoke,phase:"idle",t0:0,next:performance.now()+40000})}
+// the rocket: launches 4 s after a landing moment and every 2.5 minutes, flies out of sight, and a new one rolls out
+function launchSoon(now){if(ROCKET.g&&ROCKET.phase==="idle")ROCKET.next=now+4000}
+function moveRocket(now){const R_=ROCKET;if(!R_.g||reduce)return;
+  if(R_.phase==="idle"&&now>=R_.next){R_.phase="launch";R_.t0=now;R_.launches++}
+  const k=(now-R_.t0)/1000;
+  if(R_.phase==="launch"){const y=k<1.2?0:2.6*(k-1.2)*(k-1.2);R_.g.position.y=R_.padY+y;R_.flame.visible=true;R_.flame.scale.set(1,.8+.4*Math.sin(now/30)+Math.min(1.5,k*.4),1);
+    R_.smoke.forEach((s,i)=>{const r=.6+k*1.1;s.m.visible=k<5;s.m.position.set(R_.x+Math.cos(s.a)*r,R_.padY+.4+k*.15,R_.z+Math.sin(s.a)*r);s.m.scale.setScalar(.6+k*.5);s.m.material.opacity=Math.max(0,.5-k*.1)});
+    if(k>7){R_.phase="gone";R_.t0=now;R_.g.visible=false;R_.flame.visible=false;R_.smoke.forEach(s=>s.m.visible=false)}}
+  else if(R_.phase==="gone"&&k>3){R_.phase="rollout";R_.t0=now;R_.g.visible=true;R_.g.position.y=R_.padY;R_.g.scale.set(1,.001,1)}
+  else if(R_.phase==="rollout"){R_.g.scale.y=Math.min(1,Math.max(.001,k/1.5));if(k>=1.5){R_.phase="idle";R_.next=now+150000}}}
+// the board: the selected project (code, %, name, next step), and the city on the bottom line
+function fitText(g,t,max){if(g.measureText(t).width<=max)return t;while(t.length>1&&g.measureText(t+"…").width>max)t=t.slice(0,-1);return t+"…"}
+function wrap2(g,t,max){const w=String(t).split(/\s+/).filter(Boolean),out=[];let line="",i=0;
+  for(;i<w.length;i++){const nx=line?line+" "+w[i]:w[i];if(g.measureText(nx).width>max&&line){out.push(line);line=w[i];if(out.length===2)break}else line=nx}
+  if(out.length<2){if(line)out.push(line)}else out[1]=out[1]+" "+w.slice(i).join(" ");
+  return out.map(x=>fitText(g,x,max))}
+function drawBoard(){const g=BOARD.ctx;if(!g)return;const W=1024,H=512,p=PROJECTS.find(x=>x.id===selected);
+  g.clearRect(0,0,W,H);g.fillStyle="rgba(14,7,32,.94)";g.fillRect(8,8,W-16,H-16);
+  g.shadowColor="#2cf4ff";g.shadowBlur=18;g.strokeStyle="#2cf4ff";g.lineWidth=8;g.strokeRect(14,14,W-28,H-28);g.shadowBlur=0;
+  g.fillStyle="#ff3cac";g.fillRect(14,96,W-28,4);
+  g.textBaseline="middle";g.fillStyle="#9d8bc4";g.font="400 34px 'Share Tech Mono', monospace";
+  g.fillText("MISSION CONTROL · TOWN BOARD",44,58);
+  const lines=[];
+  if(p){const col=C[p.lane];g.font="700 132px Rajdhani, sans-serif";g.fillStyle=col;g.shadowColor=col;g.shadowBlur=14;g.fillText(p.code,44,180);g.shadowBlur=0;
+    g.textAlign="right";g.fillStyle="#fff";g.fillText(p.progress+"%",W-44,180);g.textAlign="left";
+    g.fillStyle="#0a0514";g.fillRect(44,246,W-88,16);g.fillStyle=col;g.fillRect(44,246,(W-88)*p.progress/100,16);
+    g.font="700 52px Rajdhani, sans-serif";g.fillStyle="#f3e9ff";const nm=fitText(g,p.name,W-88);g.fillText(nm,44,306);
+    g.font="500 38px Rajdhani, sans-serif";g.fillStyle="#ffd166";const nx=p.lane==="landed"?"LANDED. "+(p.completed?"Topped out "+p.completed:"Complete"):"NEXT: "+(p.next||"-");
+    const w2=wrap2(g,nx,W-88);w2.forEach((t,i)=>g.fillText(t,44,362+i*44));lines.push(p.code,p.progress+"%",nm,...w2)}
+  else{g.font="700 120px Rajdhani, sans-serif";g.fillStyle="#ffd166";g.fillText("LEVEL "+LEVEL,44,190);g.font="500 46px Rajdhani, sans-serif";g.fillStyle="#f3e9ff";g.fillText(`${STATS.xp} XP · ${STATS.landed||0} LANDED`,44,300);lines.push("LEVEL "+LEVEL)}
+  g.font="400 30px 'Share Tech Mono', monospace";g.fillStyle="#2cf4ff";const foot=`LVL ${LEVEL} · ${STATS.landed||0} LANDED · ${STATS.active7||0} ACTIVE THIS WEEK · ${carCount()} CARS`;g.fillText(fitText(g,foot,W-88),44,462);lines.push(foot);
+  HQ.boardText=lines.join(" | ");if(BOARD.tex)BOARD.tex.needsUpdate=true}
+window.drawBoard=drawBoard;
+if(document.fonts&&document.fonts.ready)document.fonts.ready.then(()=>drawBoard());
 
 
 // ---------- sound: a short synth sting for a landing. On by default, remembered per browser ----------
@@ -615,7 +799,7 @@ const toastEl=$("toast");let toastTimer=0;
 function toast(kind,title,line,cls){SHOW.toasts.push(kind);toastEl.className="toast"+(cls?" "+cls:"");toastEl.innerHTML=`<div class="k">${esc(kind)}</div><div class="t">${esc(title)}</div>${line?`<div class="x">${esc(line)}</div>`:""}`;
   requestAnimationFrame(()=>toastEl.classList.add("show"));clearTimeout(toastTimer);toastTimer=setTimeout(()=>toastEl.classList.remove("show"),3600)}
 const SHOW={floors:0,landings:0,levelups:0,toasts:[]};
-function land(b,now){b.holdCrown=false;b.landAt=now;SHOW.landings++;select(b.p.id,true);sting(b.p.size);
+function land(b,now){b.holdCrown=false;b.landAt=now;SHOW.landings++;select(b.p.id,true);sting(b.p.size);launchSoon(now);
   toast("LANDED",b.p.name,`+${b.p.floors} XP LANDING BONUS · SIZE ${b.p.size}`)}
 // prev: {id: {lit, lane, ...}} from the last visit or the last refresh. Plays what changed since then.
 function animateChanges(prev,prevLevel){
@@ -635,7 +819,7 @@ function animateChanges(prev,prevLevel){
     t+=250;
     if(it.landed){queue.push({t,fn:n=>land(b,n)});t+=2600}});
   if(prevLevel&&LEVEL>prevLevel){const fresh=unlockGroups.filter((g,lv)=>g&&lv>prevLevel);if(!reduce)fresh.forEach(g=>{g.scale.set(1,.001,1);g.visible=false});
-    queue.push({t:t+300,fn:n=>{fresh.forEach(g=>{g.visible=true;g.userData.growAt=n});SHOW.levelups++;toast("CITY LEVEL "+LEVEL,UNLOCKS[LEVEL-1]?UNLOCKS[LEVEL-1][1]:"Level up",`${STATS.xp} XP`,"lvl");sting("M")}})}
+    queue.push({t:t+300,fn:n=>{fresh.forEach(g=>{g.visible=true;g.userData.growAt=n});SHOW.levelups++;toast("CITY LEVEL "+LEVEL,unlockText(LEVEL),`${STATS.xp} XP`,"lvl");sting("M")}})}
 }
 
 // ---------- since your last visit: kept in this browser, one record per machine ----------
@@ -739,16 +923,23 @@ const PERF={calls:0,tris:0,n:0,at:0};let fpsEl=null;
 function fpsCheck(){const on=/fps/i.test(location.hash);if(on&&!fpsEl){fpsEl=document.createElement("div");fpsEl.className="fps";host.appendChild(fpsEl)}else if(!on&&fpsEl){fpsEl.remove();fpsEl=null}}
 fpsCheck();addEventListener("hashchange",fpsCheck);
 const _b=new THREE.Color(),_r=new THREE.Matrix4(),_t=new THREE.Matrix4();
-function moveCars(dt){const lim=HALF+ROAD/2+4;cars.forEach(c=>{c.s+=c.dir*c.v*dt;if(c.s>lim)c.s=-lim;if(c.s<-lim)c.s=lim;
+function moveCars(dt){cars.forEach(c=>{c.s+=c.dir*c.v*dt;if(c.s>c.s1)c.s=c.s0;if(c.s<c.s0)c.s=c.s1;
   const x=c.horiz?c.s:c.lane,z=c.horiz?c.lane:c.s,ry=c.horiz?(c.dir>0?0:Math.PI):(c.dir>0?-Math.PI/2:Math.PI/2);
   _t.compose(_v.set(x,.04,z),_q.setFromEuler(_e.set(0,ry,0)),_s.set(1,1,1));c.parts.forEach(q=>q.P.setM(q.i,_r.multiplyMatrices(_t,q.l)))})}
+// save work: no 3D drawing while the city is scrolled out of view, and no label layout while the page scrolls
+let cityVisible=true,scrollAt=-1e9;const RSTATS={skipped:0,labelSkips:0};
+try{new IntersectionObserver(es=>{cityVisible=es[es.length-1].isIntersecting}).observe(host)}catch(e){}
+addEventListener("scroll",()=>{scrollAt=performance.now()},{passive:true});
 let last=0;
 function frame(now){const dt=Math.min(.05,(now-last)/1000||0);last=now;const t=now/1000;
   while(queue.length&&queue[0].t<=now)queue.shift().fn(now);
+  if(!cityVisible){RSTATS.skipped++;requestAnimationFrame(frame);return}
   const want=spinOn&&now-idleAt>IDLE_MS?.05:0;spinV+=(want-spinV)*Math.min(1,dt*1.5);az+=dt*spinV;if(tgtGoal)tgt.lerp(tgtGoal,.06);place();
+  if(HQ.board)HQ.board.quaternion.copy(camera.quaternion);
+  moveRocket(now);
   if(!reduce){moveCars(dt);
     trains.forEach(tr=>{const u=(((t*tr.speed+tr.u0)%1)+1)%1;const q=tr.curve.getPointAt(u),d=tr.curve.getTangentAt(u);tr.m.position.set(q.x,q.y+.4,q.z);tr.m.rotation.y=-Math.atan2(d.z,d.x)});
-    fliers.forEach(f=>{const ax=f.horiz?"x":"z";f.m.position[ax]+=f.v*dt;if(f.m.position[ax]>75)f.m.position[ax]=-75;if(f.m.position[ax]<-75)f.m.position[ax]=75});
+    fliers.forEach(f=>{const ax=f.horiz?"x":"z";f.m.position[ax]+=f.v*dt;if(f.m.position[ax]>f.span)f.m.position[ax]=-f.span;if(f.m.position[ax]<-f.span)f.m.position[ax]=f.span});
     searchlights.forEach(s=>{s.piv.rotation.set(.32+.12*Math.sin(t*.4+s.ph),t*.22+s.ph,0,"YXZ")});
     blinkers.forEach(k=>{if(k.kind==="blink")k.m.visible=Math.sin(t*2.4+k.ph)>.2;else k.m.material.opacity=Math.sin(t*13+k.ph)>-.85?1:.3})}
   // cranes: a ready site turns its jib; waiting, blocked or stale sites stand still
@@ -761,6 +952,9 @@ function frame(now){const dt=Math.min(.05,(now-last)/1000||0);last=now;const t=n
     const [BP,bi]=b.beacon,lane=b.p.lane;let on=true;
     if(!reduce)on=lane==="parked"||lane==="landed"?true:lane==="blocked"?Math.sin(t*6)>0:lane==="waiting"?Math.sin(t*(b.stale?.7:2))>-.3:Math.sin(t*1.5+i)>-.6;
     BP.setC(bi,_b.set(on?(b.stale&&lane!=="landed"?"#4a5677":C[lane]):"#2a1550"));
+    // the landed ring pulses slowly in gold
+    if(b.ringSlot)b.ringSlot[0].setC(b.ringSlot[1],_b.set(C.landed).multiplyScalar(reduce?1:.72+.28*(.5+.5*Math.sin(t*1.7+i))));
+    holoTint(b,b.p.id===selected||b.p.id===hoverId);
     // the landing moment: the crown grows, the burst rings out and a beam of light goes up, then fades
     if(b.crownSlots.length&&!b.holdCrown&&b.shown>=b.N){const k=(now-b.landAt)/1000;
       if(k<4){const g=reduce?1:Math.min(1,k/1.1);setCrown(b,Math.max(.001,1-Math.pow(1-g,3)));
@@ -774,11 +968,15 @@ function frame(now){const dt=Math.min(.05,(now-last)/1000||0);last=now;const t=n
   const sb=buildings.find(b=>b.p.id===selected),hb=hoverId&&hoverId!==selected&&buildings.find(b=>b.p.id===hoverId);
   if(FX.sel){FX.sel.visible=!!sb;if(sb){FX.sel.position.set(sb.pos.x,.24,sb.pos.z);const s=sb.ringR+.55;FX.sel.scale.set(s,1,s);FX.sel.material.opacity=reduce?.8:.55+.35*Math.sin(t*4)}
     FX.hov.visible=!!hb;if(hb){FX.hov.position.set(hb.pos.x,.24,hb.pos.z);const s=hb.ringR+.55;FX.hov.scale.set(s,1,s);FX.hov.material.opacity=.4}
-    const fa=(now-FX.flashAt)/450;FX.flash.visible=fa<1;if(fa<1)FX.flash.material.opacity=.85*(1-fa)}
+    const fa=(now-FX.flashAt)/450;FX.flash.visible=fa<1;if(fa<1)FX.flash.material.opacity=.85*(1-fa);
+    // the spotlight: a cone of light down onto the selected building, off while its landing beam is up
+    const spotOn=!!sb&&!fxOn;FX.spot.visible=FX.pool.visible=spotOn;
+    if(spotOn){const R=sb.ringR+.7,Hs=sb.top+16;FX.spot.position.set(sb.pos.x,0,sb.pos.z);FX.spot.scale.set(R,Hs,R);FX.spot.material.opacity=reduce?.5:.42+.08*Math.sin(t*2);
+      FX.pool.position.set(sb.pos.x,.26,sb.pos.z);FX.pool.scale.set(R,1,R)}}
   poolList.forEach(p=>p.flush());
   renderer.render(scene,camera);PERF.calls=renderer.info.render.calls;PERF.tris=renderer.info.render.triangles;PERF.n++;
   if(fpsEl&&now-PERF.at>=500){fpsEl.textContent=`FPS ${Math.round(PERF.n*1000/(now-PERF.at))} · ${PERF.calls} DRAW CALLS · ${Math.round(PERF.tris/1000)}K TRIANGLES`;PERF.n=0;PERF.at=now}
-  placeLabels();
+  if(now-scrollAt<150)RSTATS.labelSkips++;else placeLabels();
   requestAnimationFrame(frame)}
 FX.flashAt=-1e9;
 function flashFloor(b,f){const r=b.floors[f].rect;FX.flash.position.set(r.x,r.y,r.z);FX.flash.scale.set(r.w+.3,b.FH*1.02,r.d+.3);FX.flashAt=performance.now()}
@@ -857,12 +1055,17 @@ async function boot(){
   if(st==="granted")await refresh(false);
   else{mode="needs-permission";setButtons();snapLabel("CLICK ALLOW VAULT ACCESS TO GO LIVE");renderSince("CLICK ALLOW VAULT ACCESS TO SEE WHAT CHANGED SINCE YOUR LAST VISIT.")}
 }
-window.MC={render,refresh:()=>refresh(true),look:(id,r,a)=>{const b=buildings.find(x=>x.p.id===id);if(!b)return false;setSpin(false);if(a!==undefined)az=a;rad=r||30;tgtGoal=null;tgt.set(b.pos.x,Math.min(8,b.topY*.4+1),b.pos.z);return true},view:(a,p,r)=>{az=a;rad=r;setSpin(false);tgtGoal=null;tgt.set(0,4,0)},state:()=>({mode,lastRefresh,projects:PROJECTS,warnings:WARNINGS,level:LEVEL,stats:STATS,buildings:buildings.length,
+window.MC={render,refresh:()=>refresh(true),launch:()=>{ROCKET.next=0},
+  plan:(n,lv)=>{const p=planLots(n,lv);return{blocks:p.blocks,ring:p.R,order:[...new Set(p.lots.map(l=>l.i+","+l.j))],lots:p.lots.filter(l=>!l.square).slice(0,n).map(l=>l.x+","+l.z)}},look:(id,r,a)=>{const b=buildings.find(x=>x.p.id===id);if(!b)return false;setSpin(false);if(a!==undefined)az=a;rad=r||30;tgtGoal=null;tgt.set(b.pos.x,Math.min(8,b.topY*.4+1),b.pos.z);return true},view:(a,p,r)=>{az=a;rad=r;setSpin(false);tgtGoal=null;tgt.set(0,4,0)},state:()=>({mode,lastRefresh,projects:PROJECTS,warnings:WARNINGS,level:LEVEL,stats:STATS,buildings:buildings.length,
   towers:buildings.map(b=>({id:b.p.id,floors:b.N,shown:b.shown,lane:b.p.lane,crown:b.crownSlots.length>0,kind:b.p.kind,roof:b.shown>=b.N,height:+(b.topY).toFixed(2),stale:b.stale,
+    lights:b.mode,holoFull:b.holoFull,ringWide:!!b.ringSlot,net:b.floors.reduce((n,f)=>n+(f.net.length&&f.net[0][0].list[f.net[0][1]].on?1:0),0),
     tarp:b.floors.some(f=>f.tarp.length>0&&f.tarp[0][0].list[f.tarp[0][1]].on),x:+b.pos.x.toFixed(2),z:+b.pos.z.toFixed(2),lot:b.lot.rank,ring:b.lot.ring,created:b.p.created,kit:b.kit.hash,foot:b.kit.foot,
     stage:b.floors.reduce((o,f,i)=>{const st=stageOf(b,i,b.shown);o[st]=(o[st]||0)+1;return o},{}),crane:!!b.crane,craneOn:!!(b.crane&&b.crane.on),craneTurns:!!(b.crane&&b.crane.on&&b.p.lane==="ready"&&!b.stale&&!reduce),rust:b.stale>60,fence:b.tog.fence.length>0,props:b.tog.props.some(([P,i])=>P.list[i].on),trees:b.tog.trees.some(([P,i])=>P.list[i].on),
     status:{ring:C[b.p.lane],beacon:"#"+b.beacon[0].list[b.beacon[1]].c.getHexString()}})),
   street:{...STREET},camera:{ortho:!!camera.isOrthographicCamera,elevation:+(90-ISO*180/Math.PI).toFixed(2),az,rad,fit:fitR},blocks:BLOCKS,sceneSun:(()=>{let n=0;scene.traverse(o=>{if(o.isSprite)n++});return n>0})(),pools:poolList.length,
-  unlocks:unlockGroups.map((g,lv)=>g?lv:0).filter(Boolean),perf:{calls:PERF.calls,tris:PERF.tris},queue:queue.length,show:{...SHOW,toasts:SHOW.toasts.slice()},sound:{...SOUND,on:soundOn},labels:{...LSTATS},visit:visit&&{src:visit.src,base:visit.base}})};
+  unlocks:unlockGroups.map((g,lv)=>g?lv:0).filter(Boolean),hq:{floors:HQ.floors,parts:HQ.parts.slice(),board:HQ.boardText,boardFacesCamera:!!HQ.board&&HQ.board.quaternion.angleTo(camera.quaternion)<1e-3},
+  monuments:{...MONUMENT},rocket:{phase:ROCKET.phase,launches:ROCKET.launches,y:ROCKET.g?+ROCKET.g.position.y.toFixed(2):null},spot:FX.spot?{on:FX.spot.visible,x:+FX.spot.position.x.toFixed(2),z:+FX.spot.position.z.toFixed(2)}:null,
+  render:{visible:cityVisible,...RSTATS},half:HALF,
+  beyond:(()=>{let n=0;const lim=HALF+ROAD;poolList.forEach(P=>P.list.forEach(e=>{if(!e.on||e.cur)return;if(Math.abs(e.m.elements[12])>lim||Math.abs(e.m.elements[14])>lim)n++}));return n})(),perf:{calls:PERF.calls,tris:PERF.tris},queue:queue.length,show:{...SHOW,toasts:SHOW.toasts.slice()},sound:{...SOUND,on:soundOn},labels:{...LSTATS},visit:visit&&{src:visit.src,base:visit.base}})};
 boot();
 </script>
