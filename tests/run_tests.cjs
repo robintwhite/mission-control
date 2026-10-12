@@ -652,8 +652,8 @@ async function main() {
     const { ctx, pg } = await open(page);
     await pg.waitForTimeout(500);
     const s = await pg.evaluate(() => MC.state());
-    ok(s.hero.ready && s.hero.loaded.length === 8 && s.hero.failed.length === 0 && Object.values(s.hero.tris).every(t => t <= 2100), `S. all eight pieces parsed: ${Object.entries(s.hero.tris).map(([k, v]) => k + " " + v).join(", ")} triangles`);
-    ok(["factory", "telescope", "train-head"].every(n => s.hero.roles[n].includes("glass") && s.hero.roles[n].includes("neon") && s.hero.roles[n].includes("blink")) && s.hero.roles.arena.join() === "body", `S. built pieces carry parts by role (factory: ${s.hero.roles.factory.join(", ")}); Meshy pieces are one body`);
+    ok(s.hero.ready && s.hero.loaded.length === 8 && s.hero.failed.length === 0 && Object.values(s.hero.tris).every(t => t <= 2500), `S. all eight pieces parsed: ${Object.entries(s.hero.tris).map(([k, v]) => k + " " + v).join(", ")} triangles`);
+    ok(["factory", "telescope", "train-head", "arena", "data-spire", "deco-tower"].every(n => s.hero.roles[n].includes("glass") && s.hero.roles[n].includes("neon") && s.hero.roles[n].includes("blink")) && s.hero.roles.hovercar.includes("neon"), `S. every piece is built from primitives and carries parts by role (factory: ${s.hero.roles.factory.join(", ")})`);
     const LM = s.landmarks, built = Object.keys(LM).filter(k => LM[k].on), unbuilt = Object.keys(LM).filter(k => !LM[k].on);
     ok(Object.keys(LM).length === 5 && built.join() === Object.keys(lk).filter(k => lk[k] > 0).join() && unbuilt.every(k => LM[k].x === undefined), `S. a landmark stands only for a kind that has landed, nothing shows for the others: built ${built.join(", ") || "none"}; not yet ${unbuilt.join(", ")}`);
     const f = LM.making;

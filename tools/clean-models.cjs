@@ -63,7 +63,9 @@ async function main() {
     }
     // dedup accessors only: the role materials are identical apart from their names and must stay separate
     await doc.transform(dedup({ propertyTypes: [PropertyType.ACCESSOR] }), weld());
-    const target = TARGETS[name] || TARGET, ratio = Math.min(1, target / before);
+    // a built piece (it has role materials) is left at its own count; only a Meshy export is simplified to the target
+    const built = root.listMaterials().some(m => ROLES.has(m.getName()));
+    const target = TARGETS[name] || TARGET, ratio = built ? 1 : Math.min(1, target / before);
     if (ratio < 1) await doc.transform(simplify({ simplifier: MeshoptSimplifier, ratio, error: ratio < 0.2 ? (+process.env.ERR || 0.02) : 0.01, lockBorder: false }));
     // centre on x/z, base at y = 0, wider footprint side = 1. Baked into the vertex data, so the page needs no transform
     const scene = root.listScenes()[0], b = getBounds(scene);
