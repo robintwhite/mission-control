@@ -172,7 +172,7 @@ footer{font-family:var(--mono);font-size:11px;color:var(--dim);letter-spacing:.0
     <div class="hint">HEIGHT = SIZE · BUILT FLOORS = DONE · DRAG = TURN · SHIFT+DRAG = PAN · SCROLL = ZOOM · SPACE = SPIN · ESC = CLEAR</div>
     <div class="ctl">
       <button id="snd" type="button" aria-pressed="true" title="Landing sound on/off. Remembered in this browser.">♪ SOUND ON</button>
-      <button class="spin" id="spin" type="button" aria-pressed="true" title="Auto spin on/off (Space). Resumes by itself 10 s after you stop dragging.">⟳ SPIN ON</button>
+      <button class="spin" id="spin" type="button" aria-pressed="false" title="Auto spin on/off (Space). Off by default, remembered in this browser. When on, it resumes 10 s after you stop dragging.">■ SPIN OFF</button>
     </div>
     <div class="scan"></div>
   </div>
@@ -1013,13 +1013,14 @@ $("since").addEventListener("click",e=>{const b=e.target.closest("button[data-id
 
 // ---------- camera: isometric (orthographic, fixed 35° elevation). Drag turns the city, shift-drag or right-drag pans, scroll zooms ----------
 const ISO=Math.PI/2-Math.atan(1/Math.SQRT2);   // the classic isometric angle from the vertical (elevation 35.26°)
-let az=Math.PI/4,rad=111,fitR=111,tgt=new THREE.Vector3(0,4,0),drag=null,spinOn=!reduce,idleAt=-1e9,spinV=reduce?0:.05,tgtGoal=null;
+let az=Math.PI/4,rad=111,fitR=111,tgt=new THREE.Vector3(0,4,0),drag=null,spinOn=!reduce&&store.get("mc-spin")==="on",idleAt=-1e9,spinV=0,tgtGoal=null;
 const IDLE_MS=10000,spinBtn=$("spin"),ZOOMK=.4;
-function setSpin(on){spinOn=on;if(on)idleAt=-1e9;spinBtn.setAttribute("aria-pressed",on);spinBtn.textContent=on?"⟳ SPIN ON":"■ SPIN OFF"}
+// spin is off by default and remembered per browser (Robin, 2026-10-12). Setting it from code (tests, focus) does not change the memory
+function setSpin(on,remember){spinOn=on;if(on)idleAt=-1e9;spinBtn.setAttribute("aria-pressed",on);spinBtn.textContent=on?"⟳ SPIN ON":"■ SPIN OFF";if(remember)store.set("mc-spin",on?"on":"off")}
 setSpin(spinOn);
-spinBtn.addEventListener("click",()=>setSpin(!spinOn));
+spinBtn.addEventListener("click",()=>setSpin(!spinOn,true));
 $("keyinfo").addEventListener("click",()=>{const k=$("key"),o=!k.classList.contains("open");k.classList.toggle("open",o);$("keyinfo").setAttribute("aria-expanded",o)});
-addEventListener("keydown",e=>{if(e.key==="Escape"&&selected){deselect();return}if(e.code!=="Space"||e.repeat)return;const tg=e.target;if(tg&&(tg.isContentEditable||/^(INPUT|TEXTAREA|SELECT|BUTTON|A|SUMMARY)$/.test(tg.tagName)))return;e.preventDefault();setSpin(!spinOn)});
+addEventListener("keydown",e=>{if(e.key==="Escape"&&selected){deselect();return}if(e.code!=="Space"||e.repeat)return;const tg=e.target;if(tg&&(tg.isContentEditable||/^(INPUT|TEXTAREA|SELECT|BUTTON|A|SUMMARY)$/.test(tg.tagName)))return;e.preventDefault();setSpin(!spinOn,true)});
 let viewW=1,viewH=1;
 function place(){const d=400;camera.position.set(tgt.x+d*Math.sin(ISO)*Math.sin(az),tgt.y+d*Math.cos(ISO),tgt.z+d*Math.sin(ISO)*Math.cos(az));camera.lookAt(tgt);
   const h=rad*ZOOMK,a=viewW/viewH;if(camera.top!==h||camera.right!==h*a){camera.top=h;camera.bottom=-h;camera.right=h*a;camera.left=-h*a;camera.updateProjectionMatrix()}

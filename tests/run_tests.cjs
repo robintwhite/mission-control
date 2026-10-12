@@ -692,6 +692,22 @@ async function main() {
     ok(none.hero.failed.length === 8 && Object.values(none.landmarks).every(v => v.on && !v.hero) && none.perf.calls < 600, `S. no model at all: the page still draws (${none.perf.calls} draw calls)`);
     await ctx.close();
   }
+  // S. spin is off by default and remembered per browser
+  {
+    const { ctx, pg } = await open(page);
+    const a = await pg.evaluate(() => ({ on: spinOn, az, btn: document.getElementById("spin").textContent, pressed: document.getElementById("spin").getAttribute("aria-pressed") }));
+    await pg.waitForTimeout(1200);
+    const b = await pg.evaluate(() => az);
+    ok(!a.on && a.pressed === "false" && /SPIN OFF/.test(a.btn) && Math.abs(b - a.az) < 1e-6, `S. spin is off by default: "${a.btn}", the city holds still (az ${a.az.toFixed(3)} after 1.2 s)`);
+    await pg.click("#spin"); await pg.waitForTimeout(900);
+    const c = await pg.evaluate(() => ({ on: spinOn, az, stored: localStorage.getItem("mc-spin") }));
+    ok(c.on && c.az > a.az && c.stored === "on", `S. the SPIN button turns it on and remembers it (az ${c.az.toFixed(3)})`);
+    await pg.reload(); await pg.waitForFunction(() => window.MC);
+    const d = await pg.evaluate(() => spinOn);
+    await pg.keyboard.press("Space"); const e = await pg.evaluate(() => ({ on: spinOn, stored: localStorage.getItem("mc-spin") }));
+    ok(d && !e.on && e.stored === "off", "S. after a reload spin is still on; Space turns it off and remembers that too");
+    await ctx.close();
+  }
   // S. a first landing of a kind builds its landmark on Refresh: it rises in after the landing moment, with a toast
   {
     const { ctx, pg } = await open(page);
