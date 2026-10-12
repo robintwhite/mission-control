@@ -142,7 +142,7 @@ Labels are placed nearest building first. A label that would cover another moves
 ## Known limits
 
 - Fonts are built into the page (`vendor/fonts`, latin subsets from @fontsource, SIL Open Font License, see `vendor/fonts/LICENSES.txt`). Symbols outside the latin set (⟳ ♪ ■) use system fonts.
-- The hero pieces come from Meshy's text to 3D (Meshy 6, untextured) through its free Remesh step and `tools/clean-models.cjs`. At 2,000 triangles the factory is the weakest: its remesh rounds the roof and the stacks (the source `factory-30k.glb` is crisp; simplifying it to 2K or 3.5K rounds it the same way). A sharper factory needs a new generation or a hand clean-up in Blender.
+- Six hero pieces come from Meshy's text to 3D (Meshy 6, untextured) through its free Remesh step and `tools/clean-models.cjs`. The factory is built from primitives instead (`tools/make-factory.py`, Blender's `bpy` wheel in the venv, 928 triangles): Meshy's factory was noise everywhere, and neither its remesh nor a planar decimate (`tools/planar-decimate.py`, kept for pieces that do have flat faces) gives a box back. Boxy pieces are quicker to build than to clean; the Meshy exports are in `assets/meshy-raw/archive/`.
 - No post-processing bloom; glow is faked with emissive materials. Bloom is art pass step 4 (the laptop holds about 60 FPS, so it is now an option).
 - The board is readable when zoomed in; at the default zoom it shows the code and %.
 - The cloud test browser renders in software (about 3 FPS), so real frame rates come from the `#fps` check on each machine.

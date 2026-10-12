@@ -29,8 +29,8 @@ async function main() {
   const report = [];
   const sources = {};
   for (const f of fs.readdirSync(RAW).filter(n => n.endsWith(".glb")).sort()) {
-    const name = f.replace(/(-\d+k)?\.glb$/, "");
-    if (!sources[name] || /-\d+k\.glb$/.test(f)) sources[name] = f;
+    const name = f.replace(/(-\d+k|-planar)?\.glb$/, "");
+    if (!sources[name] || /-(\d+k|planar)\.glb$/.test(f)) sources[name] = f;
   }
   for (const name of Object.keys(sources).sort()) {
     const f = sources[name];

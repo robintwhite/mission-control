@@ -43,14 +43,14 @@
   },
   {
    "name": "factory",
-   "source": "factory-30k.glb",
-   "before": 29644,
-   "after": 2087,
-   "kb": 19.6,
+   "source": "factory.glb",
+   "before": 928,
+   "after": 928,
+   "kb": 10.5,
    "size": [
-    0.969,
-    0.589,
-    1
+    1,
+    0.741,
+    0.755
    ]
   },
   {
