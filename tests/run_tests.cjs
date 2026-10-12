@@ -642,43 +642,54 @@ async function main() {
     await pg.screenshot({ path: path.join(OUT, "big-city.png") });
     await ctx.close();
   }
-  // S. art pass 3: the Meshy hero pieces. Landmarks per kind on their own blocks, the train, the hover cars, the fallback
+  // S. art pass 3: the hero pieces. Landmarks per kind that appear at a kind's first landing, the train, the hover cars, the fallback
   {
     const html = fs.readFileSync(page, "utf-8");
     const m = /const MODELS=(\{.*?\});/.exec(html), names = m ? Object.keys(JSON.parse(m[1])).sort() : [];
-    ok(names.join(",") === "arena,data-spire,deco-tower,factory,hovercar,telescope,train" && /THREE\.GLTFLoader\s*=/.test(html), `S. the page carries the seven hero pieces as inline GLB and the GLTF loader (${names.length} pieces, page ${(html.length / 1024).toFixed(0)} KB)`);
+    ok(names.join(",") === "arena,data-spire,deco-tower,factory,hovercar,telescope,train-head,train-mid" && /THREE\.GLTFLoader\s*=/.test(html), `S. the page carries the eight hero pieces as inline GLB and the GLTF loader (${names.length} pieces, page ${(html.length / 1024).toFixed(0)} KB)`);
     const lk = realPy.stats.landed_kinds, want = {}; for (const k of ["software", "making", "hardware", "career", "athletics"]) want[k] = realPy.projects.filter(p => p.lane === "landed" && p.kind === k).length;
     ok(JSON.stringify(lk) === JSON.stringify(want) && Object.keys(lk).join() === "software,making,hardware,career,athletics", `S. landed per kind in both parsers (parity above): ${JSON.stringify(lk)}`);
     const { ctx, pg } = await open(page);
     await pg.waitForTimeout(500);
     const s = await pg.evaluate(() => MC.state());
-    ok(s.hero.ready && s.hero.loaded.length === 7 && s.hero.failed.length === 0 && Object.values(s.hero.tris).every(t => t <= 2100), `S. all seven pieces parsed: ${Object.entries(s.hero.tris).map(([k, v]) => k + " " + v).join(", ")} triangles`);
-    const LM = s.landmarks, at = { software: "30.4,0", hardware: "-30.4,0", making: "0,30.4", athletics: "0,-30.4", career: "30.4,15.2" };
-    ok(Object.keys(LM).length === 5 && Object.entries(at).every(([k, xz]) => LM[k].open && LM[k].x + "," + LM[k].z === xz && LM[k].ring === 2 && LM[k].block === 9 + Object.keys(at).indexOf(k)),
-      `S. five landmark blocks in ring 2 (blocks 9 to 13): ${Object.entries(LM).map(([k, v]) => `${k} ${v.model} at ${v.x},${v.z}`).join("; ")}`);
-    ok(Object.entries(LM).every(([k, v]) => v.on === (lk[k] > 0) && v.ghost === !(lk[k] > 0) && v.hero), `S. a landmark is built only when its kind has landed, else a wireframe ghost: built ${Object.keys(LM).filter(k => LM[k].on).join(", ") || "none"}; ghosts ${Object.keys(LM).filter(k => LM[k].ghost).join(", ")}`);
+    ok(s.hero.ready && s.hero.loaded.length === 8 && s.hero.failed.length === 0 && Object.values(s.hero.tris).every(t => t <= 2100), `S. all eight pieces parsed: ${Object.entries(s.hero.tris).map(([k, v]) => k + " " + v).join(", ")} triangles`);
+    ok(["factory", "telescope", "train-head"].every(n => s.hero.roles[n].includes("glass") && s.hero.roles[n].includes("neon") && s.hero.roles[n].includes("blink")) && s.hero.roles.arena.join() === "body", `S. built pieces carry parts by role (factory: ${s.hero.roles.factory.join(", ")}); Meshy pieces are one body`);
+    const LM = s.landmarks, built = Object.keys(LM).filter(k => LM[k].on), unbuilt = Object.keys(LM).filter(k => !LM[k].on);
+    ok(Object.keys(LM).length === 5 && built.join() === Object.keys(lk).filter(k => lk[k] > 0).join() && unbuilt.every(k => LM[k].x === undefined), `S. a landmark stands only for a kind that has landed, nothing shows for the others: built ${built.join(", ") || "none"}; not yet ${unbuilt.join(", ")}`);
+    const f = LM.making;
+    ok(f.on && f.hero && f.n0 === realPy.projects.filter(p => p.created && p.created <= "2026-10-12").length && f.block >= Math.floor((f.n0 + 3) / 4) + 1 && f.block < Math.floor((f.n0 + 3) / 4) + 7 && f.date === "2026-10-12",
+      `S. the factory took block ${f.block} at the edge of the city as it was on ${f.date} (${f.n0} projects by then, so the first free block is ${Math.floor((f.n0 + 3) / 4) + 1}, a seeded pick among the next six)`);
     const li = await pg.evaluate(() => [...document.querySelectorAll("#landmarks li")].map(l => l.className + ":" + l.textContent.trim()));
-    ok(li.length === 5 && li.filter(x => x.startsWith("done")).length === Object.keys(lk).filter(k => lk[k] > 0).length && li.every(x => x.startsWith("done") || /land a \w+ project/.test(x)), `S. the unlocks panel lists the five landmarks: ${li.map(x => x.replace(/:/, " ")).join(" · ")}`);
-    // landmark blocks are never project lots, and growing the city still moves nothing
-    const pl = await pg.evaluate(() => { const out = []; for (let lv = 1; lv <= 40; lv++) out.push(MC.plan(45, lv)); return out; });
-    const lmXZ = new Set(Object.values(at).map(x => x.split(",").map(Number)));
-    const onLM = p => p.lots.filter(l => { const [x, z] = l.split(",").map(Number); return [...lmXZ].some(([a, b]) => Math.abs(x - a) < 6 && Math.abs(z - b) < 6); }).length;
-    ok(pl.every(p => onLM(p) === 0) && pl.every(p => p.lots.join("|") === pl[0].lots.join("|")) && pl[0].lots.slice(0, 21).join("|") === (await pg.evaluate(() => MC.plan(21, 1).lots.join("|"))),
-      `S. 45 projects: none takes a landmark block, the same 45 lots at every level, and the first 21 are the lots of today's 21`);
-    ok(pl[0].blocks === 18 && pl[9].blocks === 25, `S. 45 projects need ${pl[0].blocks} blocks at level 1 (ring 1, the five landmark blocks skipped, then five more); level 10 opens ${pl[9].blocks}`);
-    // the train is the hero piece; at level 9 the hover cars are too
-    ok(s.trains.n === 3 && s.trains.hero === 3, `S. the monorail carries ${s.trains.hero} of ${s.trains.n} hero train cars`);
-    const full = await pg.evaluate(() => { const ps = JSON.parse(JSON.stringify(MC.state().projects)); ps.forEach(p => { if (p.lane !== "landed") { p.lane = "landed"; p.progress = 100; p.lit = p.floors; } }); MC.render({ projects: ps, warnings: [] }); return MC.state(); });
-    ok(full.level >= 9 && full.fliers.n === 10 && full.fliers.hero === 10 && Object.values(full.landmarks).every(v => v.on && !v.ghost) && full.trains.hero === full.trains.n, `S. everything landed (level ${full.level}): all five landmarks built, ${full.fliers.hero} hover cars flying, ${full.trains.hero} train cars`);
+    ok(li.length === 5 && li.filter(x => x.startsWith("done")).length === built.length && li.every(x => x.startsWith("done") || /landing builds it/.test(x)), `S. the unlocks panel lists the five landmarks: ${li.map(x => x.replace(/:/, " ")).join(" · ")}`);
+    const bw = await pg.evaluate(() => [...document.querySelectorAll("#landmarks li b")].map(b => b.scrollWidth <= b.clientWidth + 1));
+    ok(bw.every(Boolean), "S. the kind names fit their column in the landmarks list");
+    // a landmark block is never a project lot, and the city still never moves a building when it grows or when a landmark is added
+    const pl = await pg.evaluate(() => { const out = []; for (let lv = 1; lv <= 40; lv++) out.push(MC.plan(45, lv, true)); return out; });
+    const noLm = await pg.evaluate(() => MC.plan(45, 1, false));
+    ok(pl.every(p => p.landmarks.join() === `making@${f.block}`) && pl.every(p => p.lots.join("|") === pl[0].lots.join("|")) && pl[0].lots.slice(0, 21).join("|") === noLm.lots.slice(0, 21).join("|") && pl[0].lots.slice(0, 21).join("|") === (await pg.evaluate(() => MC.plan(21, 1).lots.join("|"))),
+      `S. 45 projects with the factory on block ${f.block}: the same 45 lots at every level, today's 21 exactly where they are without any landmark, the later ones skip the block`);
+    // the train is one train: a head, middle cars and a tail, coupled close
+    ok(s.trains.n === 3 && s.trains.hero === 3 && s.trains.roles.join() === "tail,mid,head", `S. the monorail runs one train of ${s.trains.n} coupled cars: ${s.trains.roles.join(", ")}`);
+    const gap = await pg.evaluate(() => { const L = trains[0].curve.getLength(); return +((trains[1].u0 - trains[0].u0) * L).toFixed(2); });
+    ok(gap > 2.6 && gap < 2.8, `S. cars ${gap} apart along the rail (2.6 long, 0.12 gap)`);
+    ok(s.smoke === 12, `S. the factory's three stacks smoke (${s.smoke} puffs)`);
+    // a first landing of another kind puts its landmark on a block of its own, at the edge, and the factory does not move
+    const hw = await pg.evaluate(() => { const ps = JSON.parse(JSON.stringify(MC.state().projects)); const h = ps.find(p => p.kind === "hardware" && p.lane !== "landed"); h.lane = "landed"; h.progress = 100; h.lit = h.floors; h.completed = "2026-10-12"; MC.render({ projects: ps, warnings: [] }); const st = MC.state(); return { lm: st.landmarks, towers: st.towers.map(t => t.id + "@" + t.x + "," + t.z) }; });
+    const t0 = s.towers.map(t => t.id + "@" + t.x + "," + t.z);
+    ok(hw.lm.hardware.on && hw.lm.hardware.block !== hw.lm.making.block && hw.lm.making.block === f.block && hw.towers.join("|") === t0.join("|"), `S. a hardware landing: the radio telescope appears on block ${hw.lm.hardware.block}, the factory stays on ${hw.lm.making.block}, no building moved`);
+    // everything landed: five landmarks, five blocks, hover cars; budgets
+    const full = await pg.evaluate(() => { const ps = JSON.parse(JSON.stringify(MC.state().projects)); ps.forEach(p => { if (p.lane !== "landed") { p.lane = "landed"; p.progress = 100; p.lit = p.floors; p.completed = "2026-10-12"; } }); MC.render({ projects: ps, warnings: [] }); return MC.state(); });
+    const blocks = Object.values(full.landmarks).map(v => v.block);
+    ok(full.level >= 9 && full.fliers.n === 10 && full.fliers.hero === 10 && Object.values(full.landmarks).every(v => v.on && v.hero) && new Set(blocks).size === 5 && full.trains.hero === full.trains.n, `S. everything landed (level ${full.level}): five landmarks on five blocks (${blocks.join(", ")}), ${full.fliers.hero} hover cars flying, ${full.trains.hero} train cars`);
     ok(full.perf.calls < 600 && full.perf.tris < 150000 && full.beyond === 0, `S. with every hero piece in: ${full.perf.calls} draw calls, ${Math.round(full.perf.tris / 1000)}K triangles, nothing outside the open blocks`);
     await pg.evaluate(() => MC.view(Math.PI / 4, 1, 60)); await pg.waitForTimeout(400);
     await pg.screenshot({ path: path.join(OUT, "landmarks-all.png") });
     // fallback: a piece that failed to load leaves the drawn look in place, with no errors
-    const fb = await pg.evaluate(() => { ["factory", "train", "hovercar"].forEach(n => MC.dropModel(n)); const ps = JSON.parse(JSON.stringify(MC.state().projects)); MC.render({ projects: ps, warnings: [] }); return MC.state(); });
-    ok(fb.hero.failed.join() === "factory,train,hovercar" && fb.landmarks.making.on && !fb.landmarks.making.hero && fb.landmarks.athletics.hero && fb.trains.n === full.trains.n && fb.trains.hero === 0 && fb.fliers.n === 10 && fb.fliers.hero === 0,
-      `S. fallback: factory, train and hover car dropped: the factory block keeps its sign and a garden, the train and the fliers are the drawn boxes again`);
-    const none = await pg.evaluate(() => { ["arena", "data-spire", "deco-tower", "telescope"].forEach(n => MC.dropModel(n)); const ps = JSON.parse(JSON.stringify(MC.state().projects)); MC.render({ projects: ps, warnings: [] }); return MC.state(); });
-    ok(none.hero.failed.length === 7 && Object.values(none.landmarks).every(v => v.on && !v.hero && !v.ghost) && none.perf.calls < 600, `S. no model at all: the page still draws (${none.perf.calls} draw calls)`);
+    const fb = await pg.evaluate(() => { ["factory", "train-head", "hovercar"].forEach(n => MC.dropModel(n)); const ps = JSON.parse(JSON.stringify(MC.state().projects)); MC.render({ projects: ps, warnings: [] }); return MC.state(); });
+    ok(fb.hero.failed.join() === "factory,train-head,hovercar" && fb.landmarks.making.on && !fb.landmarks.making.hero && fb.landmarks.athletics.hero && fb.trains.n === full.trains.n && fb.trains.hero === 0 && fb.fliers.n === 10 && fb.fliers.hero === 0,
+      `S. fallback: factory, train head and hover car dropped: the factory block keeps its sign and a garden, the train and the fliers are the drawn boxes again`);
+    const none = await pg.evaluate(() => { ["arena", "data-spire", "deco-tower", "telescope", "train-mid"].forEach(n => MC.dropModel(n)); const ps = JSON.parse(JSON.stringify(MC.state().projects)); MC.render({ projects: ps, warnings: [] }); return MC.state(); });
+    ok(none.hero.failed.length === 8 && Object.values(none.landmarks).every(v => v.on && !v.hero) && none.perf.calls < 600, `S. no model at all: the page still draws (${none.perf.calls} draw calls)`);
     await ctx.close();
   }
   // S. a first landing of a kind builds its landmark on Refresh: it rises in after the landing moment, with a toast
@@ -699,8 +710,8 @@ async function main() {
     await pg.click("#refresh");
     await pg.waitForFunction(() => MC.state().show.landmarks === 1, null, { timeout: 25000 });
     const s = await pg.evaluate(k => { const s = MC.state(); return { lm: s.landmarks[k], landings: s.show.landings, toast: document.getElementById("toast").textContent.replace(/\s+/g, " "), stats: s.stats }; }, kind);
-    ok(before && before.ghost && !before.on && s.lm.on && !s.lm.ghost && s.landings === 1 && /LANDMARK BUILT/.test(s.toast) && s.stats.landed_kinds[kind] === 1,
-      `S. ${target.code} (${kind}) landed on Refresh: the ${s.lm.name.toLowerCase()} ghost became the built piece after the landing moment; toast "${s.toast}"`);
+    ok(before && !before.on && s.lm.on && s.lm.block > 0 && s.landings === 1 && /LANDMARK BUILT/.test(s.toast) && s.stats.landed_kinds[kind] === 1,
+      `S. ${target.code} (${kind}) landed on Refresh: the ${s.lm.name.toLowerCase()} appeared on block ${s.lm.block} after the landing moment; toast "${s.toast}"`);
     await pg.waitForTimeout(1700);
     const risen = await pg.evaluate(k => MC.state().landmarks[k].rise, kind);
     ok(risen > 0.95, `S. the ${s.lm.name.toLowerCase()} has risen in (scale ${risen})`);

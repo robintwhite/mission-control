@@ -10,7 +10,7 @@
  * A raw file named <name>-30k.glb (a denser Meshy remesh of the same piece) is preferred over <name>.glb: simplifying
  * from 30K keeps edges that Meshy's own 3K remesh rounds off. */
 const fs = require("fs"), path = require("path");
-const { NodeIO, getBounds } = require("@gltf-transform/core");
+const { NodeIO, getBounds, PropertyType } = require("@gltf-transform/core");
 const { KHRMeshQuantization } = require("@gltf-transform/extensions");
 const { dedup, weld, simplify, quantize, prune } = require("@gltf-transform/functions");
 const { MeshoptSimplifier } = require("meshoptimizer");
@@ -18,7 +18,8 @@ const { MeshoptSimplifier } = require("meshoptimizer");
 const ROOT = path.resolve(__dirname, ".."), RAW = path.join(ROOT, "assets", "meshy-raw"), OUT = path.join(ROOT, "assets", "models");
 const TARGET = 2000;  // landmarks: about 2,000 triangles each
 // the small repeated pieces get fewer: 10 hover cars and 5 train cars at 2,000 each would cost 30K triangles in a big city
-const TARGETS = { train: 900, hovercar: 600 };
+const TARGETS = { train: 900, "train-head": 900, "train-mid": 900, hovercar: 600 };
+const ROLES = new Set(["body", "body2", "glass", "neon", "lamp", "blink", "dish"]);
 // yaw (quarter turns about y) applied to a piece so its long axis runs along x where the page needs it
 const YAW = {};
 
@@ -37,12 +38,12 @@ async function main() {
     const doc = await io.read(path.join(RAW, f));
     const root = doc.getRoot();
     const before = triCount(root);
-    // one mesh, position only
+    // position only. Materials stay: their names are the roles the page colours by (body, glass, neon...); textures go
     for (const mesh of root.listMeshes()) for (const prim of mesh.listPrimitives()) {
       for (const sem of prim.listSemantics()) if (sem !== "POSITION") prim.setAttribute(sem, null);
-      prim.setMaterial(null);
+      const mt = prim.getMaterial(); if (mt && !ROLES.has(mt.getName())) prim.setMaterial(null);
     }
-    for (const m of root.listMaterials()) m.dispose();
+    for (const m of root.listMaterials()) { m.setBaseColorTexture(null); m.setMetallicRoughnessTexture(null); m.setNormalTexture(null); m.setOcclusionTexture(null); m.setEmissiveTexture(null); if (!ROLES.has(m.getName())) m.dispose(); }
     for (const t of root.listTextures()) t.dispose();
     // bake the node transforms into the vertices (Meshy exports Z-up data under a rotated node)
     for (const node of root.listNodes()) {
@@ -60,7 +61,8 @@ async function main() {
       }
       node.setTranslation([0, 0, 0]); node.setRotation([0, 0, 0, 1]); node.setScale([1, 1, 1]);
     }
-    await doc.transform(dedup(), weld());
+    // dedup accessors only: the role materials are identical apart from their names and must stay separate
+    await doc.transform(dedup({ propertyTypes: [PropertyType.ACCESSOR] }), weld());
     const target = TARGETS[name] || TARGET, ratio = Math.min(1, target / before);
     if (ratio < 1) await doc.transform(simplify({ simplifier: MeshoptSimplifier, ratio, error: ratio < 0.2 ? (+process.env.ERR || 0.02) : 0.01, lockBorder: false }));
     // centre on x/z, base at y = 0, wider footprint side = 1. Baked into the vertex data, so the page needs no transform
@@ -82,9 +84,10 @@ async function main() {
     const outPath = path.join(OUT, name + ".glb");
     await io.write(outPath, doc);
     const kb = fs.statSync(outPath).size / 1024;
-    report.push({ name, source: f, before, after, kb: +kb.toFixed(1), size: bb.max.map((v, i) => +(v - bb.min[i]).toFixed(3)) });
+    const roles = [...new Set(root.listMeshes().flatMap(m => m.listPrimitives().map(p => p.getMaterial() ? p.getMaterial().getName() : "-")))].sort();
+    report.push({ name, source: f, before, after, kb: +kb.toFixed(1), size: bb.max.map((v, i) => +(v - bb.min[i]).toFixed(3)), roles });
   }
-  for (const r of report) console.log(`${r.name.padEnd(12)} ${String(r.before).padStart(6)} -> ${String(r.after).padStart(5)} triangles, ${r.kb} KB, size ${r.size.join(" x ")}  (${r.source})`);
+  for (const r of report) console.log(`${r.name.padEnd(12)} ${String(r.before).padStart(6)} -> ${String(r.after).padStart(5)} triangles, ${r.kb} KB, size ${r.size.join(" x ")}, roles ${r.roles.join("/")}  (${r.source})`);
   fs.writeFileSync(path.join(OUT, "manifest.json"), JSON.stringify({ target: TARGET, targets: TARGETS, pieces: report }, null, 1) + "\n");
 }
 function triCount(root) {
