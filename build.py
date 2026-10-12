@@ -25,6 +25,8 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 TEMPLATE = os.path.join(HERE, "template", "mission-control.template.html")
 PARSER = os.path.join(HERE, "template", "vault-parser.js")
 THREE = os.path.join(HERE, "vendor", "three.min.js")
+GLTF = os.path.join(HERE, "vendor", "GLTFLoader.js")  # three.js r128 examples loader, same licence as three (vendor/THREE-LICENSE.txt)
+MODELS_DIR = os.path.join(HERE, "assets", "models")  # the Meshy hero pieces, cleaned by tools/clean-models.cjs (art pass 3)
 FONTS = [  # (family, weight, file in vendor/fonts). Latin subsets from @fontsource, SIL OFL (vendor/fonts/LICENSES.txt)
     ("Monoton", 400, "monoton-latin-400-normal.woff2"),
     ("Rajdhani", 500, "rajdhani-latin-500-normal.woff2"),
@@ -37,6 +39,7 @@ CANDIDATES = [os.environ.get("MC_VAULT", ""), r"E:\ObsidianVaults\robin-personal
               os.path.expanduser("~/mnt/robin-personal")]
 LANES = ["ready", "waiting", "blocked", "parked", "landed"]
 KINDS = {"software", "making", "hardware", "career", "athletics"}
+KIND_ORDER = ["software", "making", "hardware", "career", "athletics"]  # the order the landmark stats use (same in vault-parser.js)
 SIZES = {"S", "M", "L", "XL"}
 SIZE_FLOORS = {"S": 6, "M": 10, "L": 16, "XL": 24}  # building height by size (v0.2)
 STALE_DAYS = 30
@@ -56,8 +59,10 @@ def city_stats(projects):
     xp = lit + bonus
     landed = sum(1 for p in projects if p["lane"] == "landed")
     active7 = sum(1 for p in projects if p["days"] is not None and p["days"] <= ACTIVE_DAYS)
+    # projects landed per kind (art pass 3): a kind's first landing unlocks its landmark
+    landed_kinds = {k: sum(1 for p in projects if p["lane"] == "landed" and p["kind"] == k) for k in KIND_ORDER}
     return {"lit": lit, "bonus": bonus, "xp": xp, "level": 1 + xp // XP_PER_LEVEL, "per_level": XP_PER_LEVEL,
-            "landed": landed, "active7": active7}
+            "landed": landed, "active7": active7, "landed_kinds": landed_kinds}
 
 
 def real_date(s):
@@ -225,6 +230,19 @@ def font_css():
     return "\n".join(out)
 
 
+def models_js():
+    """The hero pieces (assets/models/*.glb) inlined as base64, so the page needs no files next to it.
+    A missing folder or file gives an empty table and the page falls back to its drawn look."""
+    import base64
+    out = {}
+    if os.path.isdir(MODELS_DIR):
+        for fn in sorted(os.listdir(MODELS_DIR)):
+            if fn.endswith(".glb"):
+                with open(os.path.join(MODELS_DIR, fn), "rb") as f:
+                    out[fn[:-4]] = base64.b64encode(f.read()).decode("ascii")
+    return "const MODELS=" + json.dumps(out) + ";"
+
+
 def script_json(obj):
     """JSON that is safe inside a <script> block (a note containing </script> cannot end it)."""
     return json.dumps(obj, ensure_ascii=False).replace("</", "<\\/")
@@ -255,11 +273,13 @@ def main():
         return
     tpl = open(TEMPLATE, encoding="utf-8").read()
     three = open(THREE, encoding="utf-8").read()
+    gltf = open(GLTF, encoding="utf-8").read() if os.path.exists(GLTF) else ""
     parser = open(PARSER, encoding="utf-8").read()
     snapshot = {"built": today.isoformat(), "projects": projects, "warnings": warnings}
     build = {"live": not a.mirror, "vault": VAULT_NAME}
     data = "const SNAPSHOT=" + script_json(snapshot) + ";\nconst BUILD=" + script_json(build) + ";"
-    html = tpl.replace("/*FONTS*/", font_css(), 1).replace("/*THREE*/", three, 1).replace("/*DATA*/", data, 1).replace("/*PARSER*/", parser, 1)
+    html = (tpl.replace("/*FONTS*/", font_css(), 1).replace("/*THREE*/", three, 1).replace("/*GLTF*/", gltf, 1)
+            .replace("/*MODELS*/", models_js(), 1).replace("/*DATA*/", data, 1).replace("/*PARSER*/", parser, 1))
     out = a.out or os.path.join(vault, "00 Home", "Mission Control.html")
     os.makedirs(os.path.dirname(os.path.abspath(out)), exist_ok=True)
     with open(out, "w", encoding="utf-8", newline="\n") as f:

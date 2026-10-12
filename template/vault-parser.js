@@ -21,7 +21,10 @@
     const xp = lit + bonus;
     const landed = projects.filter(p => p.lane === "landed").length;
     const active7 = projects.filter(p => p.days !== null && p.days !== undefined && p.days <= ACTIVE_DAYS).length;
-    return { lit, bonus, xp, level: 1 + Math.floor(xp / XP_PER_LEVEL), per_level: XP_PER_LEVEL, landed, active7 };
+    // projects landed per kind (art pass 3): a kind's first landing unlocks its landmark. Same key order as build.py
+    const landed_kinds = {};
+    for (const k of KINDS) landed_kinds[k] = projects.filter(p => p.lane === "landed" && p.kind === k).length;
+    return { lit, bonus, xp, level: 1 + Math.floor(xp / XP_PER_LEVEL), per_level: XP_PER_LEVEL, landed, active7, landed_kinds };
   }
 
   // Python's str.isspace() set, so strip() and \s behave the same as in build.py

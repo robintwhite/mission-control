@@ -162,6 +162,7 @@ footer{font-family:var(--mono);font-size:11px;color:var(--dim);letter-spacing:.0
         <div>LIGHTS ON + WIDE GREEN RING = LANDED · WORK LIGHTS = BUILDING</div>
         <div>SHAPE = KIND · TARP = PARKED · DARK, THEN RUST = STALE</div>
         <div>HQ AND ITS BOARD ON THE SQUARE · THE CITY GROWS EACH LEVEL</div>
+        <div>GHOST ON A RING 2 BLOCK = A LANDMARK · THE FIRST LANDING OF THAT KIND BUILDS IT</div>
         <div>CLICK EMPTY GROUND OR PRESS ESC TO CLEAR THE SELECTION</div>
       </div>
     </div>
@@ -178,7 +179,7 @@ footer{font-family:var(--mono);font-size:11px;color:var(--dim);letter-spacing:.0
     <section class="detail" id="detail" aria-live="polite"></section>
     <div class="side">
       <section class="attn"><h3>NEEDS ME BEFORE IT CAN MOVE</h3><ul id="attn"></ul></section>
-      <section class="unlocks"><h3>CITY LEVELS · 1 XP PER BUILT FLOOR · LANDING DOUBLES IT</h3><ul id="unlocks"></ul><h3 class="mon">MONUMENTS · PROJECTS LANDED</h3><ul id="monuments"></ul></section>
+      <section class="unlocks"><h3>CITY LEVELS · 1 XP PER BUILT FLOOR · LANDING DOUBLES IT</h3><ul id="unlocks"></ul><h3 class="mon">MONUMENTS · PROJECTS LANDED</h3><ul id="monuments"></ul><h3 class="mon">LANDMARKS · FIRST LANDING OF EACH KIND</h3><ul id="landmarks"></ul></section>
     </div>
   </div>
   <div class="cards" id="cards"></div>
@@ -186,6 +187,12 @@ footer{font-family:var(--mono);font-size:11px;color:var(--dim);letter-spacing:.0
 </div>
 <script>
 /*THREE*/
+</script>
+<script>
+/*GLTF*/
+</script>
+<script>
+/*MODELS*/
 </script>
 <script>
 /*DATA*/
@@ -196,7 +203,7 @@ footer{font-family:var(--mono);font-size:11px;color:var(--dim);letter-spacing:.0
 <script>
 const C={ready:"#2cf4ff",waiting:"#ffb347",blocked:"#ff4d6d",parked:"#7f8fb3",landed:"#5dffb0"};
 const LANE={ready:"READY TO FLY",waiting:"WAITING ON ME",blocked:"BLOCKED",parked:"PARKED",landed:"LANDED"};
-const UNLOCKS=[[1,"Plain roads, the town square and Mission Control HQ"],[2,"Streetlights round the town square"],[3,"The city grows two blocks a level. Lane marks, crosswalks, first-ring lights, infill and parks"],[4,"Monorail loop over the ring road"],[5,"Holo billboards on the roofs"],[6,"Neon edges on every road"],[7,"Streetlights on every block, out to the edge"],[8,"Second monorail on the outer road"],[9,"Flying traffic"],[10,"Searchlights sweep the sky from HQ"]];
+const UNLOCKS=[[1,"Plain roads, the town square and Mission Control HQ"],[2,"Streetlights round the town square"],[3,"The city grows two blocks a level. Lane marks, crosswalks, first-ring lights, infill and parks"],[4,"Monorail loop over the ring road"],[5,"Holo billboards on the roofs"],[6,"Neon edges on every road"],[7,"Streetlights on every block, out to the edge"],[8,"Second monorail on the outer road"],[9,"Hover cars fly over the city"],[10,"Searchlights sweep the sky from HQ"]];
 const GROW_TEXT="Two new blocks at the city edge, and HQ grows a floor";
 const unlockText=lv=>UNLOCKS[lv-1]?UNLOCKS[lv-1][1]:GROW_TEXT;
 // monuments on the town square, by projects landed
@@ -220,6 +227,9 @@ function renderPanels(){
   $("unlocks").innerHTML=UNLOCKS.map(([n,t])=>`<li class="${n<=LEVEL?"done":n===LEVEL+1?"next":""}"><b>LVL ${n}</b><span>${n<=LEVEL?"✓ ":n===LEVEL+1?"▸ ":""}${t}</span></li>`).join("")+`<li class="${LEVEL>=11?"done":LEVEL===10?"next":""}"><b>11+</b><span>${LEVEL>=11?"✓ ":LEVEL===10?"▸ ":""}${GROW_TEXT}. No cap</span></li>`;
   const L=STATS.landed||0,nextM=MONUMENTS.find(([n])=>L<n);
   $("monuments").innerHTML=MONUMENTS.map(([n,,t])=>`<li class="${L>=n?"done":nextM&&nextM[0]===n?"next":""}"><b>${n} LANDED</b><span>${L>=n?"✓ ":nextM&&nextM[0]===n?`▸ ${n-L} TO GO · `:""}${t}</span></li>`).join("");
+  // landmarks (art pass 3): one hero piece per kind, built by that kind's first landing
+  const LK=STATS.landed_kinds||{};
+  $("landmarks").innerHTML=LANDMARKS.map(L=>{const on=(LK[L.kind]||0)>0,has=PROJECTS.some(p=>p.kind===L.kind&&p.lane!=="landed");return `<li class="${on?"done":has?"next":""}"><b>${KIND[L.kind]}</b><span>${on?"✓ ":has?"▸ ":""}${L.name}${on?"":" · land a "+KIND[L.kind].toLowerCase()+" project"}</span></li>`}).join("");
   const cards=$("cards");cards.replaceChildren();
   order.forEach(l=>byLane(l).forEach(p=>{const b=document.createElement("button");b.type="button";b.className="card";b.dataset.id=p.id;
     b.innerHTML=`<div class="t"><span>${esc(p.name)}</span><small>${esc(p.code)} · ${esc(p.size)}${p.stale?` <span class="stale">STALE</span>`:""}</small></div><div class="n">${esc(p.north)}</div><div class="m"><i style="--p:${p.progress}%;--c:${C[p.lane]}"></i><span style="color:${C[p.lane]}">${p.progress}%</span></div>`;
@@ -365,23 +375,61 @@ const P_={
   beacon:()=>pool("beacon",G.sphere,bas),half:()=>pool("half",G.half,()=>new THREE.MeshLambertMaterial({color:0xffffff,side:THREE.DoubleSide})),
   tooth:()=>pool("tooth",G.tooth,lam),torus:()=>pool("torus",G.torus,bas),tree:()=>pool("tree",G.sphere,lam),cone:()=>pool("cone",G.cone,lam),
   tape:()=>pool("tape",G.box,()=>new THREE.MeshBasicMaterial({map:TEX.tape})),
+  // a thin flat neon ring for the landmark plinths (the torus above gets thick when scaled up)
+  thinRing:()=>pool("thinRing",()=>{const g=new THREE.RingGeometry(.47,.5,40);g.rotateX(-Math.PI/2);return g},()=>new THREE.MeshBasicMaterial({color:0xffffff,side:THREE.DoubleSide})),
 };
 // palette (walls) and neon (windows, signs, edges). Decoration never uses the lane colours, which belong to the status.
 const WALLS=[[0x9b2470,0xd2488f],[0x45308e,0x6d52cf],[0x22377c,0x3d63c4],[0x5b2066,0x8e3d9b],[0x7a1d5c,0xb23a86],[0x2f2a78,0x5047b8]];
 const NEON={cyan:0x2cf4ff,amber:0xffb347,pink:0xff5fbf,lav:0xb9a4ff};
 const RUST=new THREE.Color("#b4532a"),STEEL=0xffc93c,STEEL_RUST=0x9a5a32,TARPC=0x4f8dff,WORK_HEX=0xffb070,UNLIT=0x2c2448;
 
+// ---- hero pieces from Meshy (art pass 3), inlined as GLB and parsed once. Flat shaded in the palette; the page sets the size ----
+// A piece that is missing or fails to parse is left out: the train and hover cars keep their drawn boxes, and a landmark
+// block shows its sign and a garden instead. Nothing else depends on the models.
+const LANDMARKS=[
+  {kind:"software",model:"data-spire",name:"Data spire",w:4.6,wall:0x3d63c4,neon:NEON.cyan},
+  {kind:"hardware",model:"telescope",name:"Radio telescope",w:8.4,wall:0x6d52cf,neon:NEON.cyan},
+  {kind:"making",model:"factory",name:"Factory",w:9,wall:0x8e3d9b,neon:NEON.pink},
+  {kind:"athletics",model:"arena",name:"Arena",w:9,wall:0xd2488f,neon:NEON.pink},
+  {kind:"career",model:"deco-tower",name:"Deco office tower",w:5.2,wall:0xb23a86,neon:NEON.pink},
+];
+// the landmark blocks: blocks 9 to 13 in the opening order (the four side middles of ring 2, then the block beside the
+// east one). They are never project lots, so adding them moved no building and the lot order after them stays fixed
+const LM_FIRST_BLOCK=9;
+const HERO={geo:{},failed:[],ready:false,source:typeof MODELS==="object"&&MODELS?Object.keys(MODELS):[]};
+function loadModels(){
+  const names=HERO.source;
+  if(!names.length||typeof THREE.GLTFLoader!=="function"){HERO.failed=names.slice();HERO.ready=true;return Promise.resolve()}
+  const loader=new THREE.GLTFLoader();
+  return Promise.all(names.map(n=>new Promise(res=>{
+    let done=false;const fail=()=>{if(done)return;done=true;if(!HERO.failed.includes(n))HERO.failed.push(n);res()};
+    const timer=setTimeout(fail,5000);
+    try{const b=atob(MODELS[n]),u=new Uint8Array(b.length);for(let i=0;i<b.length;i++)u[i]=b.charCodeAt(i);
+      loader.parse(u.buffer,"",g=>{try{let src=null;g.scene.traverse(o=>{if(o.isMesh&&!src)src=o});if(!src||!src.geometry.attributes.position)throw new Error("no mesh");
+          // positions are quantized ints with the scale on the node: bake the node transform into a float geometry
+          const pa=src.geometry.attributes.position,N=pa.count,f=new Float32Array(N*3),dq=pa.normalized?(pa.array instanceof Int16Array?32767:pa.array instanceof Int8Array?127:pa.array instanceof Uint16Array?65535:pa.array instanceof Uint8Array?255:1):1;
+          for(let i=0;i<N;i++){f[i*3]=pa.getX(i)/dq;f[i*3+1]=pa.getY(i)/dq;f[i*3+2]=pa.getZ(i)/dq}
+          const geo=new THREE.BufferGeometry();geo.setAttribute("position",new THREE.BufferAttribute(f,3));if(src.geometry.index)geo.setIndex(src.geometry.index);
+          src.updateWorldMatrix(true,false);geo.applyMatrix4(src.matrixWorld);geo.computeVertexNormals();geo.computeBoundingBox();
+          geo.userData={keep:true,size:geo.boundingBox.max.clone().sub(geo.boundingBox.min),tris:(geo.index?geo.index.count:N)/3};
+          if(done)return;done=true;clearTimeout(timer);HERO.geo[n]=geo;res()}catch(e){clearTimeout(timer);fail()}},()=>{clearTimeout(timer);fail()})}
+    catch(e){clearTimeout(timer);fail()}}))).then(()=>{HERO.ready=true});
+}
+const heroMat=hex=>new THREE.MeshPhongMaterial({color:hex,flatShading:true,shininess:6,specular:0x1a1430});
+const ghostMat=()=>new THREE.MeshBasicMaterial({color:0x8f7ad8,wireframe:true,transparent:true,opacity:.2,depthWrite:false});
+let LANDMARK_STATE={},risers=[];
+
 let city=null,buildings=[],labels=[],pickables=[],cars=[],trains=[],queue=[],unlockGroups=[],signs=[],blinkers=[],fliers=[],searchlights=[],cranes=[],STREET={};
 const keepTex=t=>t&&t.userData&&t.userData.keep;
 function disposeCity(){if(!city)return;scene.remove(city);
-  city.traverse(o=>{if(o.geometry&&o.geometry!==sidesBox&&o.geometry!==sidesCyl)o.geometry.dispose();const ms=Array.isArray(o.material)?o.material:o.material?[o.material]:[];ms.forEach(m=>{if(m.map&&!keepTex(m.map))m.map.dispose();m.dispose()})});
-  labels.forEach(L=>L.el.remove());city=null;buildings=[];labels=[];pickables=[];cars=[];trains=[];queue=[];unlockGroups=[];signs=[];blinkers=[];fliers=[];searchlights=[];cranes=[];pools={};poolList=[]}
+  city.traverse(o=>{if(o.geometry&&o.geometry!==sidesBox&&o.geometry!==sidesCyl&&!(o.geometry.userData&&o.geometry.userData.keep))o.geometry.dispose();const ms=Array.isArray(o.material)?o.material:o.material?[o.material]:[];ms.forEach(m=>{if(m.map&&!keepTex(m.map))m.map.dispose();m.dispose()})});
+  labels.forEach(L=>L.el.remove());city=null;buildings=[];labels=[];pickables=[];cars=[];trains=[];queue=[];unlockGroups=[];signs=[];blinkers=[];fliers=[];searchlights=[];cranes=[];pools={};poolList=[];risers=[];LANDMARK_STATE={}}
 
 // ---- signs: one atlas texture, one merged mesh per group of signs. Words are drawn in white and tinted per sign ----
 function signAtlas(words){const cols=4,cw=256,ch=96,rows=Math.max(1,Math.ceil(words.length/cols));const c=document.createElement("canvas");c.width=cols*cw;c.height=rows*ch;const t=new THREE.CanvasTexture(c);t.anisotropy=4;
   const draw=()=>{const g=c.getContext("2d");g.clearRect(0,0,c.width,c.height);words.forEach((w,i)=>{const x=(i%cols)*cw,y=Math.floor(i/cols)*ch;
     g.fillStyle="rgba(11,6,24,.86)";g.fillRect(x+3,y+3,cw-6,ch-6);g.strokeStyle="#fff";g.lineWidth=6;g.strokeRect(x+6,y+6,cw-12,ch-12);
-    g.font=`700 ${w.length>5?46:60}px Rajdhani, 'Share Tech Mono', sans-serif`;g.textAlign="center";g.textBaseline="middle";g.shadowColor="#fff";g.shadowBlur=8;g.fillStyle="#fff";g.fillText(w,x+cw/2,y+ch/2+3);g.shadowBlur=0});t.needsUpdate=true};
+    g.font=`700 ${w.length>8?40:w.length>5?46:60}px Rajdhani, 'Share Tech Mono', sans-serif`;g.textAlign="center";g.textBaseline="middle";g.shadowColor="#fff";g.shadowBlur=8;g.fillStyle="#fff";g.fillText(w,x+cw/2,y+ch/2+3);g.shadowBlur=0});t.needsUpdate=true};
   draw();signs.push(draw);return{t,cell:i=>({u0:(i%4)/4,u1:(i%4+1)/4,v0:1-(Math.floor(i/4)+1)/rows,v1:1-Math.floor(i/4)/rows})}}
 if(document.fonts&&document.fonts.ready)document.fonts.ready.then(()=>signs.forEach(d=>d()));
 // a merged batch of double-sided sign quads: add(x, y, z, yaw, width, height, cell, colour)
@@ -532,8 +580,32 @@ class LoopCurve extends THREE.Curve{constructor(half,h,r){super();this.half=half
 function monorail(parent,half,h,hex,nCars,speed){const curve=new LoopCurve(half,h,4);
   parent.add(new THREE.Mesh(new THREE.TubeGeometry(curve,160,.14,4,true),new THREE.MeshBasicMaterial({color:hex})));
   const Pp=new Pool(G.box(),lam(),parent);for(let k=0;k<20;k++){const q=curve.getPointAt(k/20);Pp.add(M4(q.x,h/2,q.z,.22,h,.22),0x4a3a7a)}Pp.build();
-  for(let c=0;c<nCars;c++){const car=new THREE.Group();const body=new THREE.Mesh(new THREE.BoxGeometry(1.7,.55,.7),new THREE.MeshLambertMaterial({color:0xb9a4ff}));car.add(body);
-    const band=new THREE.Mesh(new THREE.BoxGeometry(1.72,.12,.72),new THREE.MeshBasicMaterial({color:hex}));band.position.y=-.12;car.add(band);parent.add(car);trains.push({m:car,curve,u0:c*.016,speed})}}
+  // the train: the Meshy piece when it loaded (2.6 long, flat shaded), else the drawn box. A neon band under it either way
+  const geo=HERO.geo.train,TL=geo?2.6:1.7;
+  for(let c=0;c<nCars;c++){const car=new THREE.Group();car.userData.hero=!!geo;
+    if(geo){const body=new THREE.Mesh(geo,heroMat(0xb9a4ff));body.scale.setScalar(TL);body.position.y=-.3;car.add(body)}
+    else{const body=new THREE.Mesh(new THREE.BoxGeometry(1.7,.55,.7),new THREE.MeshLambertMaterial({color:0xb9a4ff}));car.add(body)}
+    const band=new THREE.Mesh(new THREE.BoxGeometry(TL+.02,.12,geo?.56:.72),new THREE.MeshBasicMaterial({color:hex}));band.position.y=geo?-.3:-.12;car.add(band);parent.add(car);trains.push({m:car,curve,u0:c*.016*(TL/1.7),speed})}}
+
+// ---- the landmark blocks (art pass 3): one hero piece per kind on its own block, built by that kind's first landing ----
+// Locked: a wireframe ghost of the piece, dim, with the kind on a sign, so the reward is visible before it is earned.
+// Built: the piece in the palette on a plinth, a neon ring, four lamps, and the sign lit in the piece's neon.
+function buildLandmarks(lots,SB,kindCell){
+  const LK=STATS.landed_kinds||{},base=.18;
+  LANDMARKS.forEach(L=>{const lot=lots.find(l=>l.landmark===L.kind);if(!lot){LANDMARK_STATE[L.kind]={open:false,on:false,model:L.model,hero:!!HERO.geo[L.model],name:L.name};return}
+    const bx=lot.i*PITCH,bz=lot.j*PITCH,on=(LK[L.kind]||0)>0,geo=HERO.geo[L.model];
+    const g=new THREE.Group();g.position.set(bx,base,bz);city.add(g);
+    // the plinth: a square pad with a thin edge, and a sign on a post at the front corner
+    P_.solid().add(M4(bx,base+.03,bz,L.w+1.2,.06,L.w+1.2),on?0x2e2660:0x1d1640);
+    const sx=bx+LOT-.9,sz=bz+LOT-.5;P_.solid().add(M4(sx,base+.6,sz,.1,1.2,.1),0x4a3a7a);SB.add(sx,base+1.55,sz,0,2.6,.9,kindCell(L.kind),on?L.neon:NEON.lav);
+    let mesh=null,height=0;
+    if(geo){mesh=new THREE.Mesh(geo,on?heroMat(L.wall):ghostMat());mesh.scale.setScalar(L.w);mesh.position.y=.06;g.add(mesh);height=geo.userData.size.y*L.w}
+    else if(on){for(let t=0;t<5;t++){const a=t*1.26+.4;P_.tree().add(M4(bx+Math.cos(a)*2.4,.85,bz+Math.sin(a)*2.4,.9,1,.9),0x3ddc97)}}
+    if(on){P_.thinRing().add(M4(bx,base+.1,bz,L.w+1.4,1,L.w+1.4),L.neon);P_.thinRing().add(M4(bx,base+.1,bz,L.w+1.9,1,L.w+1.9),L.neon);
+      for(const[a,b]of[[-1,-1],[1,-1],[1,1],[-1,1]]){const x=bx+a*(LOT-.6),z=bz+b*(LOT-.6);P_.solid().add(M4(x,base+.75,z,.08,1.5,.08),0x4a3a7a);P_.glow().add(M4(x,base+1.6,z,.22,.2,.22),L.neon)}
+      if(mesh)P_.beacon().add(M4(bx,base+.2+height+.35,bz,.32,.32,.32),L.neon)}
+    risers.push(g);
+    LANDMARK_STATE[L.kind]={open:true,on,model:L.model,hero:!!geo,name:L.name,x:+bx.toFixed(2),z:+bz.toFixed(2),block:lot.block,ring:lot.ring,height:+height.toFixed(2),w:L.w,group:g,ghost:!!(geo&&!on)}})}
 
 const SIGN_WORDS=["HOTEL","BAR","RAMEN","24H","ARCADE","MOTEL","SYNTH","NOODLE","CLUB","NEON","DATA","SUSHI"];
 // The order blocks open and lots are given out: the town square, then ring 1 block by block (as in 2a, where the first
@@ -555,14 +627,21 @@ function cmpStr(a,b){return a<b?-1:a>b?1:0}
 const OPEN_BASE=9,OPEN_PER_LEVEL=2;
 const openByLevel=lv=>OPEN_BASE+OPEN_PER_LEVEL*Math.max(0,lv-2);
 const blockOpenLevel=k=>k<OPEN_BASE?1:2+Math.ceil((k-OPEN_BASE+1)/OPEN_PER_LEVEL);
-function planLots(n,level){const byLevel=openByLevel(level),need=1+Math.ceil((n+3)/4),K=Math.max(byLevel,need);
+// free lots in the first K blocks: four per block, less the town square and the landmark blocks (art pass 3)
+const lmIn=K=>Math.min(LANDMARKS.length,Math.max(0,K-LM_FIRST_BLOCK));
+const freeLotsIn=K=>4*Math.max(0,K-1-lmIn(K));
+function planLots(n,level,landedKinds){const byLevel=openByLevel(level);let need=1;while(freeLotsIn(need)<n+3)need++;
+  // a landmark that is built opens its block (and the landmark blocks before it) even before the level would
+  let lmNeed=0;LANDMARKS.forEach((L,i)=>{if(landedKinds&&landedKinds[L.kind]>0)lmNeed=LM_FIRST_BLOCK+i+1});
+  const K=Math.max(byLevel,need,lmNeed);
   let R=1;while((2*R+1)**2<K)R++;
   let full=0;for(let r=1;(2*r+1)**2<=K;r++)full=r;
   const lots=[];let maxRing=0;
   blockOrder(R).slice(0,K).forEach(([i,j],bk)=>{const ring=Math.max(Math.abs(i),Math.abs(j));maxRing=Math.max(maxRing,ring);const openLv=blockOpenLevel(bk);
-    LOT_ORDER.forEach(([li,lj])=>lots.push({i,j,ring,block:bk,openLv,square:ring===0,
-      x:i*PITCH+(li-.5)*LOT,z:j*PITCH+(lj-.5)*LOT,seed:hashStr(i+","+j+","+li+","+lj),used:null}))});
-  return{R:maxRing,full,lots,blocks:K,byLevel,need}}
+    const lm=bk>=LM_FIRST_BLOCK&&bk<LM_FIRST_BLOCK+LANDMARKS.length?LANDMARKS[bk-LM_FIRST_BLOCK].kind:null;
+    LOT_ORDER.forEach(([li,lj])=>lots.push({i,j,ring,block:bk,openLv,square:ring===0,landmark:lm,
+      x:i*PITCH+(li-.5)*LOT,z:j*PITCH+(lj-.5)*LOT,seed:hashStr(i+","+j+","+li+","+lj),used:lm?"landmark":null}))});
+  return{R:maxRing,full,lots,blocks:K,byLevel,need,lmNeed}}
 // traffic follows activity: more cars when more projects were updated in the last 7 days
 function carCount(){return Math.min(48,4+3*(STATS.active7||0))}
 
@@ -572,8 +651,8 @@ function buildCity(){
   const ug=lv=>{if(!unlockGroups[lv]){const g=new THREE.Group();g.userData.level=lv;g.userData.growAt=-1e9;unlockGroups[lv]=g;city.add(g)}return unlockGroups[lv]};
   // placement: projects sorted by start date take the lots in order. Status and progress never move a building
   const order=PROJECTS.slice().sort(byStart);
-  const plan=planLots(order.length,LEVEL);BLOCKS=2*plan.R+1;HALF=BLOCKS*PITCH/2;
-  const lots=plan.lots,free=lots.filter(l=>!l.square);
+  const plan=planLots(order.length,LEVEL,STATS.landed_kinds);BLOCKS=2*plan.R+1;HALF=BLOCKS*PITCH/2;
+  const lots=plan.lots,free=lots.filter(l=>!l.square&&!l.landmark);
   order.forEach((p,k)=>{free[k].used=p;free[k].rank=k+1});
   // city lots: the next three stay zoned for the next projects. Ring 1 fills in with the level. A newer block opens as
   // empty lots and rubble and fills in over the levels after it opened. Seeded per lot, so nothing reshuffles.
@@ -606,7 +685,8 @@ function buildCity(){
   STREET={blocks:blocks.size,byLevel:plan.byLevel,need:plan.need,ring:plan.R,fullRing:plan.full,roads:edges.size,nodes:nodes.size,tier,marks,crosswalks:walks,neonEdges:neon,
     onRoad:[...blocks.values()].every(l=>["h|"+l.j+"|"+l.i,"h|"+(l.j+1)+"|"+l.i,"v|"+l.i+"|"+l.j,"v|"+(l.i+1)+"|"+l.j].every(k=>edges.has(k)))};
   // the buildings
-  const words=[...new Set(order.map(p=>p.code))];const atlas=signAtlas(words.concat(SIGN_WORDS,["HQ"]));const SB=signBatch(atlas);
+  const words=[...new Set(order.map(p=>p.code))];const KIND_WORDS=LANDMARKS.map(L=>KIND[L.kind]);const atlas=signAtlas(words.concat(SIGN_WORDS,["HQ"],KIND_WORDS));const SB=signBatch(atlas);
+  const kindCell=k=>words.length+SIGN_WORDS.length+1+LANDMARKS.findIndex(L=>L.kind===k);
   lots.forEach(l=>{
     if(l.used&&l.used.id){const p=l.used,b=makeBuilding(p,l,words.indexOf(p.code),SB);buildings.push(b);
       const lbl=document.createElement("div");lbl.className="lbl";lbl.textContent=p.code;host.appendChild(lbl);labels.push({el:lbl,b,txt:p.code,on:false,w:0,h:0})}
@@ -621,6 +701,8 @@ function buildCity(){
     else if(l.used==="zoned"){P_.solid().add(M4(l.x,.2,l.z,LOT-.5,.03,LOT-.5),0x231a46)}});
   // the town square: Mission Control HQ, its board, and the monuments
   buildSquare(ug,SB,words.length+SIGN_WORDS.length);
+  // the landmark blocks (art pass 3)
+  buildLandmarks(lots,SB,kindCell);
   const signs=SB.mesh();city.add(signs);
   // streetlights by level: the square at 2, ring 1 at 3, every other block at 7
   const lights={};blocks.forEach(l=>{const litLevel=l.ring===0?2:l.ring===1?3:7;if(LEVEL<litLevel)return;const g=ug(litLevel);
@@ -636,7 +718,14 @@ function buildCity(){
     if(BB.n()){const m=BB.mesh();G5.add(m);blinkers.push({m,kind:"flicker",ph:rnd2()*9})}PP.build()}
   if(LEVEL>=8)monorail(ug(8),(Math.max(2,plan.full)+.5)*PITCH,13,0x2cf4ff,2,-.02);
   // level 9: flying traffic
-  if(LEVEL>=9){const G9=ug(9),span=HALF+30;for(let i=0;i<10;i++){const horiz=i%2===0,y=20+rnd2()*10,c=(rnd2()-.5)*HALF*1.4;const m=new THREE.Mesh(new THREE.BoxGeometry(horiz?1:.4,.25,horiz?.4:1),new THREE.MeshBasicMaterial({color:i%3?0x2cf4ff:0xffd166}));if(horiz)m.position.set((rnd2()-.5)*2*span,y,c);else m.position.set(c,y,(rnd2()-.5)*2*span);G9.add(m);fliers.push({m,horiz,span,v:(rnd2()<.5?-1:1)*(9+rnd2()*7)})}}
+  // level 9: hover cars (the Meshy piece when it loaded, else lit boxes) fly straight runs over the city
+  if(LEVEL>=9){const G9=ug(9),span=HALF+30,HG=HERO.geo.hovercar,HC=[0xd2488f,0x3d63c4,0x6d52cf,0xb23a86];
+    for(let i=0;i<10;i++){const horiz=i%2===0,y=20+rnd2()*10,c=(rnd2()-.5)*HALF*1.4,v=(rnd2()<.5?-1:1)*(9+rnd2()*7);let m;
+      if(HG){m=new THREE.Group();const body=new THREE.Mesh(HG,heroMat(HC[i%HC.length]));body.scale.setScalar(1.7);body.position.y=-.25;m.add(body);
+        const lamp=new THREE.Mesh(G.box(),new THREE.MeshBasicMaterial({color:i%3?0x2cf4ff:0xffd166}));lamp.scale.set(.9,.08,.5);lamp.position.y=-.28;m.add(lamp);
+        m.rotation.y=horiz?(v>0?0:Math.PI):(v>0?-Math.PI/2:Math.PI/2);m.userData.hero=true}
+      else m=new THREE.Mesh(new THREE.BoxGeometry(horiz?1:.4,.25,horiz?.4:1),new THREE.MeshBasicMaterial({color:i%3?0x2cf4ff:0xffd166}));
+      if(horiz)m.position.set((rnd2()-.5)*2*span,y,c);else m.position.set(c,y,(rnd2()-.5)*2*span);G9.add(m);fliers.push({m,horiz,span,v})}}
   // level 10: searchlights sweep the sky from the HQ roof
   if(LEVEL>=10){const G10=ug(10),hw=HQ.half*.75;[[1,1],[-1,1],[-1,-1],[1,-1]].forEach(([sx,sz],i)=>{const g=new THREE.ConeGeometry(3.2,70,20,1,true);g.translate(0,-35,0);g.rotateX(Math.PI);
     const cone=new THREE.Mesh(g,new THREE.MeshBasicMaterial({color:i%2?0x2cf4ff:0xffd166,transparent:true,opacity:.11,depthWrite:false,side:THREE.DoubleSide,blending:THREE.AdditiveBlending,fog:false}));
@@ -818,7 +907,7 @@ sndBtn.addEventListener("click",()=>{setSound(!soundOn);if(soundOn){const a=audi
 const toastEl=$("toast");let toastTimer=0;
 function toast(kind,title,line,cls){SHOW.toasts.push(kind);toastEl.className="toast"+(cls?" "+cls:"");toastEl.innerHTML=`<div class="k">${esc(kind)}</div><div class="t">${esc(title)}</div>${line?`<div class="x">${esc(line)}</div>`:""}`;
   requestAnimationFrame(()=>toastEl.classList.add("show"));clearTimeout(toastTimer);toastTimer=setTimeout(()=>toastEl.classList.remove("show"),3600)}
-const SHOW={floors:0,landings:0,levelups:0,toasts:[]};
+const SHOW={floors:0,landings:0,levelups:0,landmarks:0,toasts:[]};
 function land(b,now){b.holdCrown=false;b.landAt=now;SHOW.landings++;select(b.p.id,true);sting(b.p.size);launchSoon(now);
   toast("LANDED",b.p.name,`+${b.p.floors} XP LANDING BONUS · SIZE ${b.p.size}`)}
 // prev: {id: {lit, lane, ...}} from the last visit or the last refresh. Plays what changed since then.
@@ -838,6 +927,11 @@ function animateChanges(prev,prevLevel){
     for(let k=it.from+1;k<=to;k++){const kk=k;queue.push({t,fn:()=>{setShown(b,kk);flashFloor(b,kk-1);SHOW.floors++}});t+=step}
     t+=250;
     if(it.landed){queue.push({t,fn:n=>land(b,n)});t+=2600}});
+  // a landing that is the first of its kind builds that kind's landmark: it rises in after the landing moment, with a toast
+  const prevKinds={};PROJECTS.forEach(p=>{const o=prev[p.id];if(o&&o.lane==="landed")prevKinds[p.kind]=true});
+  const fresh=LANDMARKS.filter(L=>{const S=LANDMARK_STATE[L.kind];return S&&S.on&&S.group&&!prevKinds[L.kind]});
+  fresh.forEach(L=>{const g=LANDMARK_STATE[L.kind].group;if(!reduce){g.scale.set(1,.001,1);g.visible=false}
+    queue.push({t:t+300,fn:n=>{g.visible=true;g.scale.set(1,1,1);g.userData.growAt=reduce?-1e9:n;SHOW.landmarks++;toast("LANDMARK BUILT",L.name,`FIRST ${KIND[L.kind]} LANDING`,"lvl");sting("L")}});t+=2200});
   if(prevLevel&&LEVEL>prevLevel){const fresh=unlockGroups.filter((g,lv)=>g&&lv>prevLevel);if(!reduce)fresh.forEach(g=>{g.scale.set(1,.001,1);g.visible=false});
     queue.push({t:t+300,fn:n=>{fresh.forEach(g=>{g.visible=true;g.userData.growAt=n});SHOW.levelups++;toast("CITY LEVEL "+LEVEL,unlockText(LEVEL),`${STATS.xp} XP`,"lvl");sting("M")}})}
 }
@@ -967,6 +1061,7 @@ function frame(now){const dt=Math.min(.05,(now-last)/1000||0);last=now;const t=n
   cranes.forEach((cr,i)=>{if(!cr.on)return;const turn=!reduce&&cr.b.p.lane==="ready"&&!cr.b.stale;const ang=turn?Math.sin(t*.35+cr.ph)*1.3:cr.ph;
     _t.compose(_v.set(cr.mx,cr.H,cr.mz),_q.setFromEuler(_e.set(0,ang,0)),_s.set(1,1,1));cr.parts.forEach(q=>q.P.setM(q.i,_r.multiplyMatrices(_t,q.l)))});
   unlockGroups.forEach(g=>{if(!g)return;const k=(now-g.userData.growAt)/1400;if(k>=0&&k<1.2)g.scale.y=Math.max(.001,1-Math.pow(1-Math.min(1,k),3))});
+  risers.forEach(g=>{const k=(now-(g.userData.growAt===undefined?-1e9:g.userData.growAt))/1400;if(k>=0&&k<1.2)g.scale.y=Math.max(.001,1-Math.pow(1-Math.min(1,k),3))});
   let fxOn=false;
   buildings.forEach((b,i)=>{
     // the beacon: the status colour. Blocked flashes, waiting blinks, ready pulses slowly, parked and landed stay on
@@ -1064,6 +1159,7 @@ connectBtn.addEventListener("click",async()=>{
 refreshBtn.addEventListener("click",()=>refresh(true));
 document.addEventListener("visibilitychange",()=>{if(document.visibilityState==="visible"&&mode==="live"&&Date.now()-lastRefresh>30000)refresh(false)});
 async function boot(){
+  await loadModels();
   render(SNAPSHOT);
   requestAnimationFrame(frame);
   // the snapshot counts as a visit only where the page cannot go live: the phone mirror, a browser
@@ -1077,8 +1173,8 @@ async function boot(){
   if(st==="granted")await refresh(false);
   else{mode="needs-permission";setButtons();snapLabel("CLICK ALLOW VAULT ACCESS TO GO LIVE");renderSince("CLICK ALLOW VAULT ACCESS TO SEE WHAT CHANGED SINCE YOUR LAST VISIT.")}
 }
-window.MC={render,refresh:()=>refresh(true),launch:()=>{ROCKET.next=0},
-  plan:(n,lv)=>{const p=planLots(n,lv);return{blocks:p.blocks,ring:p.R,order:[...new Set(p.lots.map(l=>l.i+","+l.j))],lots:p.lots.filter(l=>!l.square).slice(0,n).map(l=>l.x+","+l.z)}},look:(id,r,a)=>{const b=buildings.find(x=>x.p.id===id);if(!b)return false;setSpin(false);if(a!==undefined)az=a;rad=r||30;tgtGoal=null;tgt.set(b.pos.x,Math.min(8,b.topY*.4+1),b.pos.z);return true},view:(a,p,r)=>{az=a;rad=r;setSpin(false);tgtGoal=null;tgt.set(0,4,0)},state:()=>({mode,lastRefresh,projects:PROJECTS,warnings:WARNINGS,level:LEVEL,stats:STATS,buildings:buildings.length,
+window.MC={render,refresh:()=>refresh(true),launch:()=>{ROCKET.next=0},dropModel:n=>{if(HERO.geo[n]){delete HERO.geo[n];HERO.failed.push(n);return true}return false},
+  plan:(n,lv,lk)=>{const p=planLots(n,lv,lk);return{blocks:p.blocks,ring:p.R,order:[...new Set(p.lots.map(l=>l.i+","+l.j))],lots:p.lots.filter(l=>!l.square&&!l.landmark).slice(0,n).map(l=>l.x+","+l.z)}},look:(id,r,a)=>{const b=buildings.find(x=>x.p.id===id);if(!b)return false;setSpin(false);if(a!==undefined)az=a;rad=r||30;tgtGoal=null;tgt.set(b.pos.x,Math.min(8,b.topY*.4+1),b.pos.z);return true},view:(a,p,r)=>{az=a;rad=r;setSpin(false);tgtGoal=null;tgt.set(0,4,0)},state:()=>({mode,lastRefresh,projects:PROJECTS,warnings:WARNINGS,level:LEVEL,stats:STATS,buildings:buildings.length,
   towers:buildings.map(b=>({id:b.p.id,floors:b.N,shown:b.shown,lane:b.p.lane,crown:b.crownSlots.length>0,kind:b.p.kind,roof:b.shown>=b.N,height:+(b.topY).toFixed(2),stale:b.stale,
     lights:b.mode,holoFull:b.holoFull,ringWide:!!b.ringSlot,net:b.floors.reduce((n,f)=>n+(f.net.length&&f.net[0][0].list[f.net[0][1]].on?1:0),0),
     tarp:b.floors.some(f=>f.tarp.length>0&&f.tarp[0][0].list[f.tarp[0][1]].on),x:+b.pos.x.toFixed(2),z:+b.pos.z.toFixed(2),lot:b.lot.rank,ring:b.lot.ring,created:b.p.created,kit:b.kit.hash,foot:b.kit.foot,
@@ -1086,7 +1182,9 @@ window.MC={render,refresh:()=>refresh(true),launch:()=>{ROCKET.next=0},
     status:{ring:C[b.p.lane],beacon:"#"+b.beacon[0].list[b.beacon[1]].c.getHexString()}})),
   street:{...STREET},camera:{ortho:!!camera.isOrthographicCamera,elevation:+(90-ISO*180/Math.PI).toFixed(2),az,rad,fit:fitR},blocks:BLOCKS,sceneSun:(()=>{let n=0;scene.traverse(o=>{if(o.isSprite)n++});return n>0})(),pools:poolList.length,
   unlocks:unlockGroups.map((g,lv)=>g?lv:0).filter(Boolean),hq:{floors:HQ.floors,tower:HQ.tower,boardW:HQ.boardW,parts:HQ.parts.slice(),board:HQ.boardText,boardFacesCamera:!!HQ.board&&HQ.board.quaternion.angleTo(camera.quaternion)<1e-3},
-  monuments:{...MONUMENT},rocket:{phase:ROCKET.phase,launches:ROCKET.launches,y:ROCKET.g?+ROCKET.g.position.y.toFixed(2):null},spot:FX.spot?{on:FX.spot.visible,x:+FX.spot.position.x.toFixed(2),z:+FX.spot.position.z.toFixed(2),
+  monuments:{...MONUMENT},landmarks:Object.fromEntries(Object.entries(LANDMARK_STATE).map(([k,v])=>[k,{open:v.open,on:v.on,model:v.model,hero:v.hero,ghost:!!v.ghost,x:v.x,z:v.z,block:v.block,ring:v.ring,height:v.height,w:v.w,name:v.name,rise:v.group?+v.group.scale.y.toFixed(2):null}])),
+  hero:{ready:HERO.ready,loaded:Object.keys(HERO.geo).sort(),failed:HERO.failed.slice(),source:HERO.source.slice(),tris:Object.fromEntries(Object.entries(HERO.geo).map(([k,g])=>[k,g.userData.tris]))},
+  trains:{n:trains.length,hero:trains.filter(t=>t.m.userData.hero).length},fliers:{n:fliers.length,hero:fliers.filter(f=>f.m.userData.hero).length},rocket:{phase:ROCKET.phase,launches:ROCKET.launches,y:ROCKET.g?+ROCKET.g.position.y.toFixed(2):null},spot:FX.spot?{on:FX.spot.visible,x:+FX.spot.position.x.toFixed(2),z:+FX.spot.position.z.toFixed(2),
     sourceY:FX.spot.visible?+_v.set(FX.spot.position.x,FX.spot.scale.y,FX.spot.position.z).project(camera).y.toFixed(2):null}:null,selected,deselected,
   render:{visible:cityVisible,...RSTATS},half:HALF,
   beyond:(()=>{let n=0;const lim=HALF+ROAD;poolList.forEach(P=>P.list.forEach(e=>{if(!e.on||e.cur)return;if(Math.abs(e.m.elements[12])>lim||Math.abs(e.m.elements[14])>lim)n++}));return n})(),perf:{calls:PERF.calls,tris:PERF.tris},queue:queue.length,show:{...SHOW,toasts:SHOW.toasts.slice()},sound:{...SOUND,on:soundOn},labels:{...LSTATS},visit:visit&&{src:visit.src,base:visit.base}})};

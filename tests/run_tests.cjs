@@ -562,7 +562,9 @@ async function main() {
     const { ctx, pg } = await open(page);
     await pg.waitForTimeout(600);
     const s = await pg.evaluate(() => MC.state());
-    const L = s.level, byLevel = 9 + 2 * Math.max(0, L - 2), need = 1 + Math.ceil((s.towers.length + 3) / 4);
+    // free lots: four per block, less the square and the five landmark blocks (blocks 9 to 13, art pass 3)
+    const needFor = n => { let K = 1; const free = K => 4 * Math.max(0, K - 1 - Math.min(5, Math.max(0, K - 9))); while (free(K) < n + 3) K++; return K; };
+    const L = s.level, byLevel = 9 + 2 * Math.max(0, L - 2), need = needFor(s.towers.length);
     ok(s.street.blocks === Math.max(byLevel, need) && s.street.onRoad, `R. level ${L}: ${s.street.blocks} blocks open (9 + 2 a level from level 3), every block has a road on all four sides`);
     ok(s.beyond === 0, `R. no skyline towers: nothing stands outside the open blocks (${s.beyond} parts beyond the edge)`);
     const pl = await pg.evaluate(() => { const out = []; for (let lv = 1; lv <= 40; lv++) out.push(MC.plan(21, lv)); return out; });
@@ -633,8 +635,77 @@ async function main() {
       MC.render({ projects: ps, warnings: [] }); MC.view(Math.PI / 4, 1, 200); return null; });
     await pg.waitForTimeout(800);
     const sb = await pg.evaluate(() => MC.state());
-    ok(sb.level > 60 && sb.perf.calls < 600 && sb.perf.tris < 150000 && sb.street.onRoad && sb.beyond === 0, `R. a very big city (61 XL landed, level ${sb.level}, ${sb.street.blocks} blocks): ${sb.perf.calls} draw calls, ${Math.round(sb.perf.tris / 1000)}K triangles`);
+    // art pass 3: the hero pieces (five landmarks at about 2,000 triangles, 5 train cars at 900, 10 hover cars at 600) add about
+    // 20K to this stress city, which was 144K in 2b. The 150K line holds for the real city (33K today) and up to roughly 50 landed XL
+    // projects; this case is checked against 175K. See the vault note, art pass 3 status.
+    ok(sb.level > 60 && sb.perf.calls < 600 && sb.perf.tris < 175000 && sb.street.onRoad && sb.beyond === 0, `R. a very big city (61 XL landed, level ${sb.level}, ${sb.street.blocks} blocks): ${sb.perf.calls} draw calls, ${Math.round(sb.perf.tris / 1000)}K triangles (under 175K; the 150K line is for the real city)`);
     await pg.screenshot({ path: path.join(OUT, "big-city.png") });
+    await ctx.close();
+  }
+  // S. art pass 3: the Meshy hero pieces. Landmarks per kind on their own blocks, the train, the hover cars, the fallback
+  {
+    const html = fs.readFileSync(page, "utf-8");
+    const m = /const MODELS=(\{.*?\});/.exec(html), names = m ? Object.keys(JSON.parse(m[1])).sort() : [];
+    ok(names.join(",") === "arena,data-spire,deco-tower,factory,hovercar,telescope,train" && /THREE\.GLTFLoader\s*=/.test(html), `S. the page carries the seven hero pieces as inline GLB and the GLTF loader (${names.length} pieces, page ${(html.length / 1024).toFixed(0)} KB)`);
+    const lk = realPy.stats.landed_kinds, want = {}; for (const k of ["software", "making", "hardware", "career", "athletics"]) want[k] = realPy.projects.filter(p => p.lane === "landed" && p.kind === k).length;
+    ok(JSON.stringify(lk) === JSON.stringify(want) && Object.keys(lk).join() === "software,making,hardware,career,athletics", `S. landed per kind in both parsers (parity above): ${JSON.stringify(lk)}`);
+    const { ctx, pg } = await open(page);
+    await pg.waitForTimeout(500);
+    const s = await pg.evaluate(() => MC.state());
+    ok(s.hero.ready && s.hero.loaded.length === 7 && s.hero.failed.length === 0 && Object.values(s.hero.tris).every(t => t <= 2100), `S. all seven pieces parsed: ${Object.entries(s.hero.tris).map(([k, v]) => k + " " + v).join(", ")} triangles`);
+    const LM = s.landmarks, at = { software: "30.4,0", hardware: "-30.4,0", making: "0,30.4", athletics: "0,-30.4", career: "30.4,15.2" };
+    ok(Object.keys(LM).length === 5 && Object.entries(at).every(([k, xz]) => LM[k].open && LM[k].x + "," + LM[k].z === xz && LM[k].ring === 2 && LM[k].block === 9 + Object.keys(at).indexOf(k)),
+      `S. five landmark blocks in ring 2 (blocks 9 to 13): ${Object.entries(LM).map(([k, v]) => `${k} ${v.model} at ${v.x},${v.z}`).join("; ")}`);
+    ok(Object.entries(LM).every(([k, v]) => v.on === (lk[k] > 0) && v.ghost === !(lk[k] > 0) && v.hero), `S. a landmark is built only when its kind has landed, else a wireframe ghost: built ${Object.keys(LM).filter(k => LM[k].on).join(", ") || "none"}; ghosts ${Object.keys(LM).filter(k => LM[k].ghost).join(", ")}`);
+    const li = await pg.evaluate(() => [...document.querySelectorAll("#landmarks li")].map(l => l.className + ":" + l.textContent.trim()));
+    ok(li.length === 5 && li.filter(x => x.startsWith("done")).length === Object.keys(lk).filter(k => lk[k] > 0).length && li.every(x => x.startsWith("done") || /land a \w+ project/.test(x)), `S. the unlocks panel lists the five landmarks: ${li.map(x => x.replace(/:/, " ")).join(" · ")}`);
+    // landmark blocks are never project lots, and growing the city still moves nothing
+    const pl = await pg.evaluate(() => { const out = []; for (let lv = 1; lv <= 40; lv++) out.push(MC.plan(45, lv)); return out; });
+    const lmXZ = new Set(Object.values(at).map(x => x.split(",").map(Number)));
+    const onLM = p => p.lots.filter(l => { const [x, z] = l.split(",").map(Number); return [...lmXZ].some(([a, b]) => Math.abs(x - a) < 6 && Math.abs(z - b) < 6); }).length;
+    ok(pl.every(p => onLM(p) === 0) && pl.every(p => p.lots.join("|") === pl[0].lots.join("|")) && pl[0].lots.slice(0, 21).join("|") === (await pg.evaluate(() => MC.plan(21, 1).lots.join("|"))),
+      `S. 45 projects: none takes a landmark block, the same 45 lots at every level, and the first 21 are the lots of today's 21`);
+    ok(pl[0].blocks === 18 && pl[9].blocks === 25, `S. 45 projects need ${pl[0].blocks} blocks at level 1 (ring 1, the five landmark blocks skipped, then five more); level 10 opens ${pl[9].blocks}`);
+    // the train is the hero piece; at level 9 the hover cars are too
+    ok(s.trains.n === 3 && s.trains.hero === 3, `S. the monorail carries ${s.trains.hero} of ${s.trains.n} hero train cars`);
+    const full = await pg.evaluate(() => { const ps = JSON.parse(JSON.stringify(MC.state().projects)); ps.forEach(p => { if (p.lane !== "landed") { p.lane = "landed"; p.progress = 100; p.lit = p.floors; } }); MC.render({ projects: ps, warnings: [] }); return MC.state(); });
+    ok(full.level >= 9 && full.fliers.n === 10 && full.fliers.hero === 10 && Object.values(full.landmarks).every(v => v.on && !v.ghost) && full.trains.hero === full.trains.n, `S. everything landed (level ${full.level}): all five landmarks built, ${full.fliers.hero} hover cars flying, ${full.trains.hero} train cars`);
+    ok(full.perf.calls < 600 && full.perf.tris < 150000 && full.beyond === 0, `S. with every hero piece in: ${full.perf.calls} draw calls, ${Math.round(full.perf.tris / 1000)}K triangles, nothing outside the open blocks`);
+    await pg.evaluate(() => MC.view(Math.PI / 4, 1, 60)); await pg.waitForTimeout(400);
+    await pg.screenshot({ path: path.join(OUT, "landmarks-all.png") });
+    // fallback: a piece that failed to load leaves the drawn look in place, with no errors
+    const fb = await pg.evaluate(() => { ["factory", "train", "hovercar"].forEach(n => MC.dropModel(n)); const ps = JSON.parse(JSON.stringify(MC.state().projects)); MC.render({ projects: ps, warnings: [] }); return MC.state(); });
+    ok(fb.hero.failed.join() === "factory,train,hovercar" && fb.landmarks.making.on && !fb.landmarks.making.hero && fb.landmarks.athletics.hero && fb.trains.n === full.trains.n && fb.trains.hero === 0 && fb.fliers.n === 10 && fb.fliers.hero === 0,
+      `S. fallback: factory, train and hover car dropped: the factory block keeps its sign and a garden, the train and the fliers are the drawn boxes again`);
+    const none = await pg.evaluate(() => { ["arena", "data-spire", "deco-tower", "telescope"].forEach(n => MC.dropModel(n)); const ps = JSON.parse(JSON.stringify(MC.state().projects)); MC.render({ projects: ps, warnings: [] }); return MC.state(); });
+    ok(none.hero.failed.length === 7 && Object.values(none.landmarks).every(v => v.on && !v.hero && !v.ghost) && none.perf.calls < 600, `S. no model at all: the page still draws (${none.perf.calls} draw calls)`);
+    await ctx.close();
+  }
+  // S. a first landing of a kind builds its landmark on Refresh: it rises in after the landing moment, with a toast
+  {
+    const { ctx, pg } = await open(page);
+    await pg.evaluate(() => { window.__noReload = 1; });
+    await stubPicker(pg, realFiles, "robin-personal");
+    await pg.click("#connect");
+    await waitLive(pg);
+    const lk = realPy.stats.landed_kinds, kind = Object.keys(lk).find(k => lk[k] === 0 && realPy.projects.some(p => p.kind === k && p.lane !== "landed"));
+    const target = realPy.projects.find(p => p.kind === kind && p.lane !== "landed");
+    const before = await pg.evaluate(k => MC.state().landmarks[k], kind);
+    await pg.evaluate(([note]) => {
+      const parts = (note + ".md").split("/"); let n = FAKE._node; for (const p of parts.slice(0, -1)) n = n.children.get(p);
+      const f = n.children.get(parts[parts.length - 1]).file;
+      f.bytes = new TextEncoder().encode(new TextDecoder().decode(f.bytes).replace(/^status:.*$/m, "status: completed\ncompleted: 2026-10-12"));
+    }, [target.note]);
+    await pg.click("#refresh");
+    await pg.waitForFunction(() => MC.state().show.landmarks === 1, null, { timeout: 25000 });
+    const s = await pg.evaluate(k => { const s = MC.state(); return { lm: s.landmarks[k], landings: s.show.landings, toast: document.getElementById("toast").textContent.replace(/\s+/g, " "), stats: s.stats }; }, kind);
+    ok(before && before.ghost && !before.on && s.lm.on && !s.lm.ghost && s.landings === 1 && /LANDMARK BUILT/.test(s.toast) && s.stats.landed_kinds[kind] === 1,
+      `S. ${target.code} (${kind}) landed on Refresh: the ${s.lm.name.toLowerCase()} ghost became the built piece after the landing moment; toast "${s.toast}"`);
+    await pg.waitForTimeout(1700);
+    const risen = await pg.evaluate(k => MC.state().landmarks[k].rise, kind);
+    ok(risen > 0.95, `S. the ${s.lm.name.toLowerCase()} has risen in (scale ${risen})`);
+    await pg.evaluate(() => MC.view(Math.PI / 4, 1, 60)); await pg.waitForTimeout(300);
+    await pg.screenshot({ path: path.join(OUT, "landmark-unlock.png") });
     await ctx.close();
   }
   // R. no 3D drawing while the city is scrolled out of view
