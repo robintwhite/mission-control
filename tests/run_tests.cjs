@@ -485,7 +485,7 @@ async function main() {
     ok(live.every(t => { const left = t.floors - t.shown; return (st(t).scaf || 0) === Math.min(2, left) && (st(t).frame || 0) === Math.min(2, Math.max(0, left - 2)) && (st(t).holo || 0) === Math.max(0, left - 4); }),
       `O. build front on ${live.length} active sites: 2 floors scaffold and net, 2 floors steel frame ahead, the rest a hologram blueprint`);
     ok(s.towers.every(t => t.crane === ((t.lane === "ready" || t.lane === "waiting") && t.shown < t.floors && realPy.projects.find(p => p.id === t.id).progress > 0)), "O. a crane on every ready or waiting site that is not topped out");
-    ok(s.towers.every(t => t.status.ring === ({ ready: "#2cf4ff", waiting: "#ffb347", blocked: "#ff4d6d", parked: "#7f8fb3", landed: "#ffe27a" })[t.lane]), "O. the base ring carries the status colour");
+    ok(s.towers.every(t => t.status.ring === ({ ready: "#2cf4ff", waiting: "#ffb347", blocked: "#ff4d6d", parked: "#7f8fb3", landed: "#5dffb0" })[t.lane]), "O. the base ring carries the status colour");
     ok(s.towers.filter(t => t.lane === "landed").every(t => t.trees && t.roof && t.crown && !t.crane && !t.props), "O. landed: scaffold gone, roof and crown on, trees planted, site cleared");
     const feet = new Set(s.towers.map(t => t.foot)), kits = new Set(s.towers.map(t => t.kit));
     ok(feet.size >= 4 && kits.size === s.towers.length, `O. the kit varies: footprints ${[...feet].join(", ")}; ${kits.size} different buildings out of ${s.towers.length}`);
@@ -571,10 +571,12 @@ async function main() {
     ok(pl.every(p => p.lots.join("|") === pl[0].lots.join("|")), "R. growing the city never moves a project: the same 21 lots at every level");
     ok(pl[2].order.slice(9, 11).sort().join(" ") === "-2,0 2,0" && pl[3].order.slice(11, 13).sort().join(" ") === "0,-2 0,2", `R. ring 2 opens from the middle of each side, opposite sides in pairs (level 3: ${pl[2].order.slice(9, 11).join(" and ")}; level 4: ${pl[3].order.slice(11, 13).join(" and ")})`);
     ok(s.street.tier === (L >= 6 ? 3 : L >= 3 ? 2 : 1) && (s.street.tier < 3 || s.street.neonEdges > 0) && (s.street.tier < 2 || s.street.marks > 0), `R. roads at level ${L}: tier ${s.street.tier} (${s.street.marks} lane marks, ${s.street.crosswalks} crosswalks, ${s.street.neonEdges} neon edges)`);
-    ok(s.hq.floors === Math.min(18, 3 + L) && s.hq.parts.includes("board") && (L < 4 || s.hq.parts.includes("wings")) && (L < 6 || s.hq.parts.includes("roof neon")), `R. HQ on the square: ${s.hq.floors} floors at level ${L}, ${s.hq.parts.join(", ")}`);
+    ok(s.hq.floors === (L < 3 ? 1 : L < 6 ? 2 : 3) && (L < 2 ? s.hq.tower === 0 : s.hq.tower === Math.min(28, 3 + 1.5 * (L - 1))) && s.hq.parts.includes("plaza") && s.hq.parts.includes("board") && (L < 4 || s.hq.parts.includes("pavilions")) && (L < 5 || s.hq.parts.includes("observation pod")),
+      `R. HQ is a domed civic centre on a round plaza: ${s.hq.floors} drum floors and a ${s.hq.tower} high needle tower at level ${L}; ${s.hq.parts.join(", ")}`);
+    ok(s.hq.boardW >= 12 && s.hq.board.split(" | ").length <= 5, `R. the board is big (${s.hq.boardW} wide) with few lines: "${s.hq.board}"`);
     const sel = s.towers.find(t => t.id === (s.projects.find(p => p.lane === "ready") || {}).id);
     ok(sel && s.hq.board.startsWith(sel.id ? s.projects.find(p => p.id === sel.id).code : "") && s.hq.boardFacesCamera, `R. the board shows the selected project and faces the camera: "${s.hq.board.slice(0, 60)}..."`);
-    ok(s.spot && s.spot.on && Math.abs(s.spot.x - sel.x) < .01 && Math.abs(s.spot.z - sel.z) < .01, "R. a spotlight shines on the selected building");
+    ok(s.spot && s.spot.on && Math.abs(s.spot.x - sel.x) < .01 && Math.abs(s.spot.z - sel.z) < .01 && s.spot.sourceY > 1.2, `R. a spotlight shines on the selected building from above the view (its source is off screen, y ${s.spot.sourceY})`);
     const other = s.projects.find(p => p.lane === "landed");
     await pg.evaluate(id => { const c = document.querySelector(`.card[data-id="${id}"]`); c.click(); }, other.id); await pg.waitForTimeout(300);
     const s1 = await pg.evaluate(() => MC.state());
@@ -582,12 +584,30 @@ async function main() {
     ok(s1.towers.filter(t => t.holoFull).map(t => t.id).join() === other.id, "R. only the selected building's blueprint is full strength; the rest are faint");
     const mode = t => t.lane === "landed" ? "lit" : (t.lane === "ready" || t.lane === "waiting") && !t.stale ? "work" : "off";
     ok(s.towers.every(t => t.lights === mode(t)), `R. lights on only when landed (${s.towers.filter(t => t.lights === "lit").length}), work lights on active sites (${s.towers.filter(t => t.lights === "work").length}), dark when stopped (${s.towers.filter(t => t.lights === "off").length})`);
-    ok(s.towers.every(t => t.ringWide === (t.lane === "landed")), "R. the wide gold ring only on landed buildings");
+    ok(s.towers.every(t => t.ringWide === (t.lane === "landed")), "R. the wide green ring only on landed buildings");
     const act = s.towers.filter(t => t.lane !== "landed" && t.lane !== "parked" && t.shown < t.floors && (t.stage.scaf || 0) > 0);
     ok(act.length > 0 && act.every(t => t.net === 1), `R. green net on the top scaffold floor only (${act.length} sites)`);
     const title = await pg.evaluate(() => getComputedStyle(document.querySelector("header h1")).backgroundImage);
     ok(!/255, 60, 172/.test(title) && /44, 244, 255/.test(title), "R. the title is all neon blue (pink only in its glow)");
     ok(s.monuments.landed === s.stats.landed && s.monuments.plaza === (s.stats.landed >= 5) && !s.monuments.rocket, `R. ${s.stats.landed} landed: monuments ${["plaza", "pad", "rocket"].filter(k => s.monuments[k]).join(", ") || "none yet"}`);
+    // clearing the selection: Esc, and a click on empty ground. It stays clear after a refresh
+    const key0 = await pg.evaluate(() => getComputedStyle(document.getElementById("keymore")).display);
+    await pg.click("#keyinfo"); await pg.mouse.move(5, 5); await pg.waitForTimeout(100);
+    const key1 = await pg.evaluate(() => getComputedStyle(document.getElementById("keymore")).display);
+    await pg.click("#keyinfo"); await pg.mouse.move(5, 5);
+    const keyH = await pg.evaluate(() => document.getElementById("key").getBoundingClientRect().height);
+    ok(key0 === "none" && key1 === "block" && keyH < 40, `R. the legend shows only the status colours (${Math.round(keyH)} px high); the i button opens the rest`);
+    await pg.keyboard.press("Escape"); await pg.waitForTimeout(150);
+    const d1 = await pg.evaluate(() => ({ s: MC.state(), det: document.getElementById("detail").textContent, cards: document.querySelectorAll(".card.sel").length }));
+    ok(d1.s.selected === null && d1.s.spot && !d1.s.spot.on && /NOTHING SELECTED/.test(d1.det) && d1.cards === 0 && d1.s.hq.board.startsWith("MISSION CONTROL"), "R. Esc clears the selection: no spotlight, the detail panel and the board show the city");
+    await pg.evaluate(id => document.querySelector(`.card[data-id="${id}"]`).click(), other.id); await pg.waitForTimeout(150);
+    const cb = await pg.locator("canvas").boundingBox();
+    await pg.mouse.click(cb.x + 60, cb.y + cb.height - 70); await pg.waitForTimeout(200);
+    const d2 = await pg.evaluate(() => MC.state());
+    await pg.evaluate(() => { const ps = JSON.parse(JSON.stringify(MC.state().projects)); MC.render({ projects: ps, warnings: [] }); });
+    const d3 = await pg.evaluate(() => MC.state().selected);
+    ok(d2.selected === null && d3 === null, "R. a click on empty ground clears it too, and it stays clear after a refresh");
+    await pg.evaluate(id => document.querySelector(`.card[data-id="${id}"]`).click(), sel.id);
     // traffic follows activity
     const traffic = await pg.evaluate(() => { const ps = JSON.parse(JSON.stringify(MC.state().projects)); const out = [];
       ps.forEach(p => p.days = 40); MC.render({ projects: ps, warnings: [] }); out.push(MC.state().street.cars);
@@ -596,7 +616,7 @@ async function main() {
     ok(traffic[0] === 4 && traffic[1] === 19 && traffic[2] === 48, `R. traffic follows activity: no project moved this week ${traffic[0]} cars, 5 moved ${traffic[1]}, all moved ${traffic[2]} (the most)`);
     // a small city at level 1: plain roads only
     const small = await pg.evaluate(() => { const ps = JSON.parse(JSON.stringify(MC.state().projects)).slice(0, 3); ps.forEach(p => { p.lane = "ready"; p.progress = 10; p.lit = Math.floor(p.floors / 10); }); MC.render({ projects: ps, warnings: [] }); return MC.state(); });
-    ok(small.level === 1 && small.street.blocks === 9 && small.street.tier === 1 && small.street.marks === 0 && small.street.neonEdges === 0 && small.hq.floors === 4, `R. level 1: the square and ring 1 (9 blocks), plain roads, HQ ${small.hq.floors} floors`);
+    ok(small.level === 1 && small.street.blocks === 9 && small.street.tier === 1 && small.street.marks === 0 && small.street.neonEdges === 0 && small.hq.floors === 1 && small.hq.tower === 0, `R. level 1: the square and ring 1 (9 blocks), plain roads, a small domed HQ with no tower yet`);
     // monuments: 5, 10 and 25 landed; the rocket launches
     const mon = await pg.evaluate(() => { const base = JSON.parse(JSON.stringify(MC.state().projects)); const out = {};
       const make = n => { const ps = []; for (let k = 0; k < n; k++) { const q = JSON.parse(JSON.stringify(base[k % base.length])); q.id = "m" + k; q.code = "M" + k; q.created = "2026-0" + (1 + k % 9) + "-1" + (k % 10); q.lane = "landed"; q.progress = 100; q.lit = q.floors; ps.push(q); } MC.render({ projects: ps, warnings: [] }); return MC.state(); };
