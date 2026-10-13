@@ -639,7 +639,7 @@ function buildLandmarks(lots,SB,kindCell,LMP){
     if(H&&L.smoke&&!reduce)L.smoke.forEach((o,si)=>{for(let k=0;k<4;k++){const m=new THREE.Mesh(G.sphere(),new THREE.MeshBasicMaterial({color:0x7d72aa,transparent:true,opacity:.4,depthWrite:false}));g.add(m);
       SMOKE.push({m,x:o[0]*L.w,y:o[1]*L.w+.06,z:o[2]*L.w,ph:(si*.37+k*.25)%1,w:L.w})}});
     risers.push(g);
-    LANDMARK_STATE[L.kind]={on:true,model:L.model,hero:!!H,name:L.name,x:+bx.toFixed(2),z:+bz.toFixed(2),block:lot.block,ring:lot.ring,height:+height.toFixed(2),w:L.w,group:g,date:info.date,n0:info.n0,first:info.first}})}
+    LANDMARK_STATE[L.kind]={on:true,model:L.model,hero:!!H,name:L.name,x:+bx.toFixed(2),z:+bz.toFixed(2),block:lot.block,ring:lot.ring,height:+height.toFixed(2),w:L.w,group:g,date:info.date,n0:info.n0,first:info.first,cands:info.cands,weights:info.weights,near:info.near}})}
 // smoke: puffs rise from each stack, grow and fade, on a loop with a little wind
 function moveSmoke(now){if(!SMOKE.length)return;const T=4200;SMOKE.forEach(p=>{const k=(((now/T)+p.ph)%1+1)%1;p.m.position.set(p.x+k*p.w*.12,p.y+k*p.w*.26,p.z-k*p.w*.05);const sc=p.w*(.035+.09*k);p.m.scale.setScalar(sc);p.m.material.opacity=.42*(1-k)*(1-k)})}
 
@@ -674,11 +674,24 @@ function landmarkPlan(order){const plan={blocks:{},info:{}};const dated=order.fi
   // earlier landmarks never move for later ones: each picks on its own, and only a later one steps aside on a clash.
   // Order: the landing date (clamped to the epoch), then the real landing date, then the kind
   firsts.sort((a,b)=>cmpStr(a.date,b.date)||cmpStr(a.raw,b.raw)||cmpStr(a.L.kind,b.L.kind));
-  const taken=new Set();
+  // the pick among the next six free blocks is weighted by the distance (in blocks, the larger of the two axes) to the
+  // nearest landmark already standing: a block that touches one, even at a corner, weighs nothing while any other is free,
+  // and the rest weigh the squared distance less one. If all six touch, the six after them are tried. With none standing
+  // the six weigh the same, which is the plain seeded pick the first landmark (the factory, block 10) was placed with
+  const taken=new Set(),placed=[];
   firsts.forEach(({L,p,date})=>{const n0=dated.filter(q=>q.created<=date).length,first=Math.floor((n0+3)/4)+1;
-    let bk=first+Math.floor(mulberry(hashStr(L.kind+"|"+p.id+"|"+date))()*6);while(taken.has(bk))bk++;taken.add(bk);
-    plan.blocks[bk]=L.kind;plan.info[L.kind]={block:bk,date,n0,first:p.id}});
+    const weigh=b=>{if(!placed.length)return 1;const [i,j]=blockPos(b);let d=1e9;placed.forEach(([pi,pj])=>d=Math.min(d,Math.max(Math.abs(i-pi),Math.abs(j-pj))));return Math.max(0,d-1)**2};
+    let cands=[];for(let b=first;cands.length<6;b++)if(!taken.has(b))cands.push(b);
+    let w=cands.map(weigh);
+    // every one of the six touches a landmark: look at the six after them; if those touch too, the first six weigh the same
+    if(!w.some(x=>x>0)){const more=[];for(let b=cands[5]+1;more.length<6;b++)if(!taken.has(b))more.push(b);const wm=more.map(weigh);if(wm.some(x=>x>0)){cands=more;w=wm}else w=w.map(()=>1)}
+    const total=w.reduce((a,x)=>a+x,0),r=mulberry(hashStr(L.kind+"|"+p.id+"|"+date))()*total;let acc=0,bk=cands[cands.length-1];
+    for(let k=0;k<cands.length;k++){acc+=w[k];if(r<acc){bk=cands[k];break}}
+    taken.add(bk);placed.push(blockPos(bk));const near=placed.length>1?Math.min(...placed.slice(0,-1).map(([pi,pj])=>Math.max(Math.abs(blockPos(bk)[0]-pi),Math.abs(blockPos(bk)[1]-pj)))):null;
+    plan.blocks[bk]=L.kind;plan.info[L.kind]={block:bk,date,n0,first:p.id,cands:cands.slice(),weights:w.map(x=>+x.toFixed(2)),near}});
   return plan}
+// block index to its (i, j) on the grid, from the opening order
+let BLOCK_POS=null;function blockPos(k){if(!BLOCK_POS||k>=BLOCK_POS.length)BLOCK_POS=blockOrder(Math.max(12,Math.ceil(Math.sqrt(k+1)/2)+2));return BLOCK_POS[k]}
 // free lots in the first K blocks: four per block, less the town square and any landmark block in range
 const freeLotsIn=(K,lm)=>{let n=0;for(let b=1;b<K;b++)if(!lm||!lm.blocks[b])n+=4;return n};
 function planLots(n,level,lm){const byLevel=openByLevel(level);let need=1;while(freeLotsIn(need,lm)<n+3)need++;
@@ -1133,7 +1146,8 @@ function postSize(){const v=renderer.getDrawingBufferSize(new THREE.Vector2()),d
   POST.main=msaa?new THREE.WebGLMultisampleRenderTarget(w,h,o):new THREE.WebGLRenderTarget(w,h,o);if(msaa)POST.main.samples=4;
   const gw=Math.max(2,Math.round(w/div)),gh=Math.max(2,Math.round(h/div)),bo=Object.assign({},o,{depthBuffer:false});
   POST.glow=new THREE.WebGLRenderTarget(gw,gh,o);POST.blurA=new THREE.WebGLRenderTarget(gw,gh,bo);POST.blurB=new THREE.WebGLRenderTarget(gw,gh,bo);POST.gw=gw;POST.gh=gh;
-  const ww=Math.max(2,Math.round(gw/2)),wh=Math.max(2,Math.round(gh/2));POST.wideA=new THREE.WebGLRenderTarget(ww,wh,bo);POST.wideB=new THREE.WebGLRenderTarget(ww,wh,bo);POST.ww=ww;POST.wh=wh}
+  // the wide level is always at a quarter of the screen: half the glow size on HIGH, the glow size itself on LOW
+  const ww=div===4?gw:Math.max(2,Math.round(gw/2)),wh=div===4?gh:Math.max(2,Math.round(gh/2));POST.wideA=new THREE.WebGLRenderTarget(ww,wh,bo);POST.wideB=new THREE.WebGLRenderTarget(ww,wh,bo);POST.ww=ww;POST.wh=wh}
 // The glow pass material for a scene material. "self": a light, drawn as it is. A facade (lit windows): its emissive map
 // alone, no wall colour. Anything else: black, keeping the map, alpha test, blending and the shell shader so it still
 // hides what is behind it exactly as the real material does.
@@ -1154,10 +1168,12 @@ function drawFrame(target){
   try{if(!POST.quad)postInit();postSize();
     renderer.setRenderTarget(POST.main);renderer.render(scene,camera);
     glowSwap();renderer.setRenderTarget(POST.glow);renderer.render(scene,camera);glowRestore();
-    // two levels of blur: a tight halo at the glow size and a wide one at half that again (the wide one carries most of the look)
-    blurPass(POST.glow,POST.blurA,1,0);blurPass(POST.blurA,POST.blurB,0,1);
+    // two levels of blur: a tight halo at the glow size and a wide one at a quarter of the screen (the wide one carries most of
+    // the look). The steps are in screen pixels, so LOW is the same glow as HIGH computed at quarter resolution, not a wider haze
+    const t=POST.div===4?.5:1;
+    blurPass(POST.glow,POST.blurA,t,0);blurPass(POST.blurA,POST.blurB,0,t);
     blurPass(POST.blurB,POST.wideA,1,0);blurPass(POST.wideA,POST.wideB,0,1);
-    if(quality==="high"){blurPass(POST.wideB,POST.wideA,2,0);blurPass(POST.wideA,POST.wideB,0,2)}
+    blurPass(POST.wideB,POST.wideA,2,0);blurPass(POST.wideA,POST.wideB,0,2);
     POST.strength=BLOOM_K*1.6;
     const u=POST.comp.uniforms;u.tex.value=POST.main.texture;u.glow.value=POST.blurB.texture;u.wide.value=POST.wideB.texture;u.strength.value=POST.strength;u.aspect.value=POST.w/POST.h;
     POST.quad.material=POST.comp;renderer.setRenderTarget(target||null);renderer.render(POST.scene,POST.cam);POST.frames++}
@@ -1317,11 +1333,11 @@ window.MC={render,refresh:()=>refresh(true),launch:()=>{ROCKET.next=0},setQualit
     tarp:b.floors.some(f=>f.tarp.length>0&&f.tarp[0][0].list[f.tarp[0][1]].on),x:+b.pos.x.toFixed(2),z:+b.pos.z.toFixed(2),lot:b.lot.rank,ring:b.lot.ring,created:b.p.created,kit:b.kit.hash,foot:b.kit.foot,
     stage:b.floors.reduce((o,f,i)=>{const st=stageOf(b,i,b.shown);o[st]=(o[st]||0)+1;return o},{}),crane:!!b.crane,craneOn:!!(b.crane&&b.crane.on),craneTurns:!!(b.crane&&b.crane.on&&b.p.lane==="ready"&&!b.stale&&!reduce),rust:b.stale>60,fence:b.tog.fence.length>0,props:b.tog.props.some(([P,i])=>P.list[i].on),trees:b.tog.trees.some(([P,i])=>P.list[i].on),
     status:{ring:C[b.p.lane],beacon:"#"+b.beacon[0].list[b.beacon[1]].c.getHexString()},ringR:+b.ringR.toFixed(2)})),
-  post:{quality,on:quality!=="off"&&POST.ok,ok:POST.ok,error:POST.error||null,strength:+POST.strength.toFixed(3),frames:POST.frames,size:POST.main?[POST.w,POST.h]:null,glowSize:POST.glow?[POST.gw,POST.gh]:null,div:POST.div,msaa:POST.msaa,swapped:POST.swapped,emisMats:POST.emisMats,blackMats:POST.blackMats,btn:glowBtn.textContent},
+  post:{quality,on:quality!=="off"&&POST.ok,ok:POST.ok,error:POST.error||null,strength:+POST.strength.toFixed(3),frames:POST.frames,size:POST.main?[POST.w,POST.h]:null,glowSize:POST.glow?[POST.gw,POST.gh]:null,wideSize:POST.wideA?[POST.ww,POST.wh]:null,div:POST.div,msaa:POST.msaa,swapped:POST.swapped,emisMats:POST.emisMats,blackMats:POST.blackMats,btn:glowBtn.textContent},
   prog:{...CITY_K},walls:WALLS.map(w=>w[0]),litIntensity:(()=>{let m=0;poolList.forEach(P=>{if(P.mat.emissiveMap&&P.mat.userData.mode==="lit")m=Math.max(m,P.mat.emissiveIntensity)});return +m.toFixed(3)})(),
   street:{...STREET},camera:{ortho:!!camera.isOrthographicCamera,elevation:+(90-ISO*180/Math.PI).toFixed(2),az,rad,fit:fitR},blocks:BLOCKS,sceneSun:(()=>{let n=0;scene.traverse(o=>{if(o.isSprite)n++});return n>0})(),pools:poolList.length,
   unlocks:unlockGroups.map((g,lv)=>g?lv:0).filter(Boolean),hq:{floors:HQ.floors,tower:HQ.tower,boardW:HQ.boardW,parts:HQ.parts.slice(),board:HQ.boardText,boardFacesCamera:!!HQ.board&&HQ.board.quaternion.angleTo(camera.quaternion)<1e-3},
-  monuments:{...MONUMENT},landmarks:Object.fromEntries(Object.entries(LANDMARK_STATE).map(([k,v])=>[k,{on:v.on,model:v.model,hero:v.hero,x:v.x,z:v.z,block:v.block,ring:v.ring,height:v.height,w:v.w,name:v.name,date:v.date,n0:v.n0,first:v.first,rise:v.group?+v.group.scale.y.toFixed(2):null}])),
+  monuments:{...MONUMENT},landmarks:Object.fromEntries(Object.entries(LANDMARK_STATE).map(([k,v])=>[k,{on:v.on,model:v.model,hero:v.hero,x:v.x,z:v.z,block:v.block,ring:v.ring,height:v.height,w:v.w,name:v.name,date:v.date,n0:v.n0,first:v.first,cands:v.cands,weights:v.weights,near:v.near,rise:v.group?+v.group.scale.y.toFixed(2):null}])),
   hero:{ready:HERO.ready,loaded:Object.keys(HERO.geo).sort(),failed:HERO.failed.slice(),source:HERO.source.slice(),tris:Object.fromEntries(Object.entries(HERO.geo).map(([k,g])=>[k,g.tris])),roles:Object.fromEntries(Object.entries(HERO.geo).map(([k,g])=>[k,g.roles]))},smoke:SMOKE.length,
   trains:{n:trains.length,hero:trains.filter(t=>t.m.userData.hero).length,roles:trains.map(t=>t.m.userData.role||"box")},fliers:{n:fliers.length,hero:fliers.filter(f=>f.m.userData.hero).length},rocket:{phase:ROCKET.phase,launches:ROCKET.launches,y:ROCKET.g?+ROCKET.g.position.y.toFixed(2):null},spot:FX.spot?{on:FX.spot.visible,x:+FX.spot.position.x.toFixed(2),z:+FX.spot.position.z.toFixed(2),
     sourceY:FX.spot.visible?+_v.set(FX.spot.position.x,FX.spot.scale.y,FX.spot.position.z).project(camera).y.toFixed(2):null}:null,selected,deselected,

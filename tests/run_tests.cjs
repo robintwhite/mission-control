@@ -685,10 +685,13 @@ async function main() {
     const hw = await pg.evaluate(() => { const ps = JSON.parse(JSON.stringify(MC.state().projects)); const h = ps.find(p => p.kind === "hardware" && p.lane !== "landed"); h.lane = "landed"; h.progress = 100; h.lit = h.floors; h.completed = "2026-10-12"; MC.render({ projects: ps, warnings: [] }); const st = MC.state(); return { lm: st.landmarks, towers: st.towers.map(t => t.id + "@" + t.x + "," + t.z) }; });
     const t0 = s.towers.map(t => t.id + "@" + t.x + "," + t.z);
     ok(hw.lm.hardware.on && hw.lm.hardware.block !== hw.lm.making.block && hw.lm.making.block === f.block && hw.towers.join("|") === t0.join("|"), `S. a hardware landing: the radio telescope appears on block ${hw.lm.hardware.block}, the factory stays on ${hw.lm.making.block}, no building moved`);
+    ok(hw.lm.hardware.near >= 2 && hw.lm.hardware.weights.some(w => w === 0), `S. the telescope keeps its distance from the factory: block ${hw.lm.hardware.block}, ${hw.lm.hardware.near} blocks away; the six candidates ${hw.lm.hardware.cands.join(", ")} weighed ${hw.lm.hardware.weights.join(", ")}`);
     // everything landed: five landmarks, five blocks, hover cars; budgets
     const full = await pg.evaluate(() => { const ps = JSON.parse(JSON.stringify(MC.state().projects)); ps.forEach(p => { if (p.lane !== "landed") { p.lane = "landed"; p.progress = 100; p.lit = p.floors; p.completed = "2026-10-12"; } }); MC.render({ projects: ps, warnings: [] }); return MC.state(); });
     const blocks = Object.values(full.landmarks).map(v => v.block);
     ok(full.level >= 9 && full.fliers.n === 10 && full.fliers.hero === 10 && Object.values(full.landmarks).every(v => v.on && v.hero) && new Set(blocks).size === 5 && full.trains.hero === full.trains.n, `S. everything landed (level ${full.level}): five landmarks on five blocks (${blocks.join(", ")}), ${full.fliers.hero} hover cars flying, ${full.trains.hero} train cars`);
+    const near = Object.entries(full.landmarks).map(([k, v]) => [k, v.block, v.near]);
+    ok(near.every(([, , n]) => n === null || n >= 2) && full.landmarks.making.block === 10, `S. no two landmarks touch, even at a corner (block and distance to the nearest earlier one: ${near.map(([k, b, n]) => k + " " + b + (n === null ? " first" : " at " + n)).join(", ")}); the factory keeps block 10`);
     ok(full.perf.calls < 600 && full.perf.tris < 150000 && full.beyond === 0, `S. with every hero piece in: ${full.perf.calls} draw calls, ${Math.round(full.perf.tris / 1000)}K triangles, nothing outside the open blocks`);
     await pg.evaluate(() => MC.view(Math.PI / 4, 1, 60)); await pg.waitForTimeout(400);
     await pg.screenshot({ path: path.join(OUT, "landmarks-all.png") });
@@ -757,7 +760,7 @@ async function main() {
     const high = s.perf;
     ok(high.calls < 600 && high.tris < 150000, `T. HIGH budget on today's city: ${high.calls} draw calls and ${Math.round(high.tris / 1000)}K triangles over both passes (under 600 and 150K)`);
     await pg.click("#glow"); await pg.waitForTimeout(400); s = await post();
-    ok(s.post.quality === "low" && s.post.div === 4 && s.post.btn === "✦ GLOW LOW" && Math.abs(s.post.glowSize[0] - W[0] / 4) <= 1, `T. one click: LOW, the glow at quarter resolution (${s.post.glowSize.join("x")})`);
+    ok(s.post.quality === "low" && s.post.div === 4 && s.post.btn === "✦ GLOW LOW" && Math.abs(s.post.glowSize[0] - W[0] / 4) <= 1 && s.post.wideSize[0] === s.post.glowSize[0], `T. one click: LOW, the glow at quarter resolution (${s.post.glowSize.join("x")}), the wide blur at the same quarter as on HIGH (${s.post.wideSize.join("x")}), so LOW is not a wider haze`);
     await pg.click("#glow"); await pg.waitForTimeout(400); s = await post();
     const off = s.perf;
     ok(s.post.quality === "off" && !s.post.on && s.post.btn === "✦ GLOW OFF" && (await pg.getAttribute("#glow", "aria-pressed")) === "false" && s.post.strength === 0, "T. two clicks: OFF, one pass straight to the screen, no glow");
