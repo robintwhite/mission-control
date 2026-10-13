@@ -2,7 +2,7 @@
 
 One neon city screen showing every project in Robin's personal vault: what it is building, its state, the next step, what it is waiting on, and how far along it is. It is an isometric, low-poly city builder. Each project is a building on its own lot, placed by start date: the oldest round the town square, newer ones outward block by block. A building never moves; it rises floor by floor as progress goes up, and its lights come on when it lands. The city levels up as floors get built and grows outward with no cap. Mission Control HQ stands on the town square.
 
-The vault note for this project: `Archive/Mission Control Dashboard/Mission Control Dashboard.md`. **Status: closed 2026-10-12, in daily use.** Art passes 2a, 2b, 3 and 4 step 1 are in; the remaining look steps (signs and lettering, bevels and props, holograms, shadows) and other ideas are listed in that note's §10 for a v2.
+The vault note for this project: `Archive/Mission Control Dashboard/Mission Control Dashboard.md`. **Status: closed 2026-10-12, in daily use.** Art passes 2a, 2b, 3 and 4 step 1 are in; the remaining look steps (signs and lettering, bevels and props, holograms, shadows) and other ideas are listed in that note's §10 for a v2. A v2 continues in this repo from `main`, extending what is here; it is not a rewrite.
 
 ## How it works
 
