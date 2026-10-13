@@ -270,7 +270,8 @@ function mulberry(a){return function(){a|=0;a=a+0x6D2B79F5|0;let t=Math.imul(a^a
 function hashStr(s){let h=2166136261;for(const ch of String(s)){h^=ch.codePointAt(0);h=Math.imul(h,16777619)}return h>>>0}
 const host=$("city");
 const reduce=matchMedia("(prefers-reduced-motion: reduce)").matches;
-const renderer=new THREE.WebGLRenderer({antialias:true,alpha:true});renderer.setClearColor(0x000000,0);renderer.setPixelRatio(Math.min(devicePixelRatio,2));renderer.info.autoReset=false;host.prepend(renderer.domElement);
+// high-performance asks a dual-GPU laptop for its discrete GPU (Chrome honours it on Windows when the page is on the integrated one)
+const renderer=new THREE.WebGLRenderer({antialias:true,alpha:true,powerPreference:"high-performance"});renderer.setClearColor(0x000000,0);renderer.setPixelRatio(Math.min(devicePixelRatio,2));renderer.info.autoReset=false;host.prepend(renderer.domElement);
 const scene=new THREE.Scene();scene.fog=new THREE.Fog(0x0b0618,300,500);
 const camera=new THREE.OrthographicCamera(-10,10,10,-10,1,1200);
 // flat-shaded look: a violet sky light, a warm key from one side and a cool rim from the other, so each face of a block reads differently
@@ -1333,7 +1334,7 @@ window.MC={render,refresh:()=>refresh(true),launch:()=>{ROCKET.next=0},setQualit
     tarp:b.floors.some(f=>f.tarp.length>0&&f.tarp[0][0].list[f.tarp[0][1]].on),x:+b.pos.x.toFixed(2),z:+b.pos.z.toFixed(2),lot:b.lot.rank,ring:b.lot.ring,created:b.p.created,kit:b.kit.hash,foot:b.kit.foot,
     stage:b.floors.reduce((o,f,i)=>{const st=stageOf(b,i,b.shown);o[st]=(o[st]||0)+1;return o},{}),crane:!!b.crane,craneOn:!!(b.crane&&b.crane.on),craneTurns:!!(b.crane&&b.crane.on&&b.p.lane==="ready"&&!b.stale&&!reduce),rust:b.stale>60,fence:b.tog.fence.length>0,props:b.tog.props.some(([P,i])=>P.list[i].on),trees:b.tog.trees.some(([P,i])=>P.list[i].on),
     status:{ring:C[b.p.lane],beacon:"#"+b.beacon[0].list[b.beacon[1]].c.getHexString()},ringR:+b.ringR.toFixed(2)})),
-  post:{quality,on:quality!=="off"&&POST.ok,ok:POST.ok,error:POST.error||null,strength:+POST.strength.toFixed(3),frames:POST.frames,size:POST.main?[POST.w,POST.h]:null,glowSize:POST.glow?[POST.gw,POST.gh]:null,wideSize:POST.wideA?[POST.ww,POST.wh]:null,div:POST.div,msaa:POST.msaa,swapped:POST.swapped,emisMats:POST.emisMats,blackMats:POST.blackMats,btn:glowBtn.textContent},
+  post:{quality,gpu:(()=>{try{const gl=renderer.getContext();return{pref:gl.getContextAttributes().powerPreference,webgl2:!!renderer.capabilities.isWebGL2}}catch(e){return null}})(),on:quality!=="off"&&POST.ok,ok:POST.ok,error:POST.error||null,strength:+POST.strength.toFixed(3),frames:POST.frames,size:POST.main?[POST.w,POST.h]:null,glowSize:POST.glow?[POST.gw,POST.gh]:null,wideSize:POST.wideA?[POST.ww,POST.wh]:null,div:POST.div,msaa:POST.msaa,swapped:POST.swapped,emisMats:POST.emisMats,blackMats:POST.blackMats,btn:glowBtn.textContent},
   prog:{...CITY_K},walls:WALLS.map(w=>w[0]),litIntensity:(()=>{let m=0;poolList.forEach(P=>{if(P.mat.emissiveMap&&P.mat.userData.mode==="lit")m=Math.max(m,P.mat.emissiveIntensity)});return +m.toFixed(3)})(),
   street:{...STREET},camera:{ortho:!!camera.isOrthographicCamera,elevation:+(90-ISO*180/Math.PI).toFixed(2),az,rad,fit:fitR},blocks:BLOCKS,sceneSun:(()=>{let n=0;scene.traverse(o=>{if(o.isSprite)n++});return n>0})(),pools:poolList.length,
   unlocks:unlockGroups.map((g,lv)=>g?lv:0).filter(Boolean),hq:{floors:HQ.floors,tower:HQ.tower,boardW:HQ.boardW,parts:HQ.parts.slice(),board:HQ.boardText,boardFacesCamera:!!HQ.board&&HQ.board.quaternion.angleTo(camera.quaternion)<1e-3},

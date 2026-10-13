@@ -756,6 +756,7 @@ async function main() {
     ok(btns.join(" ") === "snd:♪ SOUND ON spin:■ SPIN OFF glow:✦ GLOW HIGH", `T. the GLOW button sits with SOUND and SPIN and starts on HIGH: ${btns.join(" · ")}`);
     const W = s.post.size, G = s.post.glowSize;
     ok(s.post.on && s.post.ok && !s.post.error && s.post.div === 2 && W && G && Math.abs(G[0] - W[0] / 2) <= 1 && Math.abs(G[1] - W[1] / 2) <= 1 && s.post.frames > 0, `T. HIGH: three passes, the glow at half resolution (${W.join("x")} → ${G.join("x")}), ${s.post.msaa ? "MSAA on the main pass" : "no MSAA"}, ${s.post.frames} frames so far`);
+    ok(s.post.gpu && s.post.gpu.pref === "high-performance", `T. the canvas asks for the high-performance GPU (${s.post.gpu && s.post.gpu.pref}, ${s.post.gpu && s.post.gpu.webgl2 ? "WebGL2" : "WebGL1"})`);
     ok(s.post.emisMats > 0 && s.post.blackMats > 0 && s.post.swapped > 50, `T. the glow pass swaps materials: ${s.post.emisMats} lit facades drawn by their windows alone, ${s.post.blackMats} kinds of part painted black, ${s.post.swapped} meshes swapped per frame`);
     const high = s.perf;
     ok(high.calls < 600 && high.tris < 150000, `T. HIGH budget on today's city: ${high.calls} draw calls and ${Math.round(high.tris / 1000)}K triangles over both passes (under 600 and 150K)`);
