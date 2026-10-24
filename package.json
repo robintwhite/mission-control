@@ -1,7 +1,8 @@
 {
   "name": "mission-control",
   "private": true,
-  "description": "Dev tooling only. The dashboard itself needs none of this: tests (Playwright) and the Meshy model cleanup (gltf-transform).",
+  "description": "Dev tooling only: the tests (Playwright) and the 3D model cleanup (gltf-transform). The page itself needs none of this.",
+  "license": "MIT",
   "scripts": {
     "test": "node tests/run_tests.cjs",
     "models": "node tools/clean-models.cjs"

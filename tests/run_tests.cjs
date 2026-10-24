@@ -1,12 +1,16 @@
 /* Mission Control tests: build.py and the in-page parser must agree, and the live refresh must work.
  *
- *   node tests/run_tests.cjs --vault "E:\ObsidianVaults\robin-personal" [--python .venv\Scripts\python.exe]
+ *   node tests/run_tests.cjs [--vault PATH] [--python .venv\Scripts\python.exe]
  *
- * Needs Node 18+ and Playwright with its Chromium (dev only; the dashboard itself needs neither).
+ * Runs on examples/sample-projects unless --vault (or MC_VAULT) names another folder of project notes.
+ * Run it on your own folder too: the parity checks then cover your real notes.
+ *
+ * Needs Node 20+ and Playwright with its Chromium (dev only; the dashboard itself needs neither).
  * Writes everything to tests/out/ (git-ignored). Never writes to the vault.
  *
- * 1. Parity in Node: build.py --dump vs template/vault-parser.js, on the real vault and on a
- *    generated edge-case vault (BOM, CRLF, bad lanes, bad dates, lists, odd file names...).
+ * 1. Parity in Node: build.py --dump vs template/vault-parser.js, on the main folder, on a generated
+ *    edge-case folder (BOM, CRLF, bad lanes, bad dates, lists, odd file names, skipped folders...) and on
+ *    a folder with a settings note (title, folders, links).
  * 2. Headless Chromium on the built page, opened from file:// like the real thing:
  *    snapshot fallback, Connect vault (picker stubbed with a fake folder) with parity against
  *    build.py, Refresh after an edit with no page reload, warnings panel, wrong folder,
@@ -29,10 +33,10 @@ const P = require("../template/vault-parser.js");
 const ROOT = path.resolve(__dirname, "..");
 const OUT = path.join(__dirname, "out");
 const arg = (k, d) => { const i = process.argv.indexOf(k); return i > 0 ? process.argv[i + 1] : d; };
-const VAULT = arg("--vault", process.env.MC_VAULT);
+const VAULT = path.resolve(arg("--vault", process.env.MC_VAULT || path.join(ROOT, "examples", "sample-projects")));
+const VNAME = path.basename(VAULT);
 const PY = arg("--python", fs.existsSync(path.join(ROOT, ".venv/Scripts/python.exe")) ? path.join(ROOT, ".venv/Scripts/python.exe") : path.join(ROOT, ".venv/bin/python"));
 const TZ = Intl.DateTimeFormat().resolvedOptions().timeZone;
-if (!VAULT) { console.error("Pass --vault PATH"); process.exit(2); }
 fs.mkdirSync(OUT, { recursive: true });
 const TODAY = P.localISODate(Date.now());
 
@@ -40,13 +44,18 @@ let failures = 0;
 const ok = (cond, msg) => { console.log((cond ? "  PASS " : "  FAIL ") + msg); if (!cond) failures++; };
 const py = (...a) => execFileSync(PY, [path.join(ROOT, "build.py"), ...a], { encoding: "utf-8" });
 
-function readTree(dir) {
-  const files = [];
+// The folder as the fake handle sees it: every folder as an entry, every .md note, and small other files (so the
+// parsers' filters are exercised). With a settings note that names folders, only those are read in full.
+function readTree(dir, folders) {
+  const files = [], only = folders && folders.length ? folders : null;
   (function walk(d, rel) {
     for (const n of fs.readdirSync(d)) {
       const full = path.join(d, n), r = rel ? rel + "/" + n : n, st = fs.statSync(full);
-      if (st.isDirectory()) { if (rel || n === "Projects" || n === "Archive") walk(full, r); }
-      else if (rel) files.push({ path: r, bytes: fs.readFileSync(full), lastModified: st.mtimeMs });
+      if (st.isDirectory()) {
+        if (n === ".git" || n === "node_modules") continue;
+        files.push({ path: r, dir: true });
+        if (!only || only.some(f => (r + "/").startsWith(f + "/") || (f + "/").startsWith(r + "/"))) walk(full, r);
+      } else if (n.endsWith(".md") || st.size < 4096) files.push({ path: r, bytes: fs.readFileSync(full), lastModified: st.mtimeMs });
     }
   })(dir, "");
   return files;
@@ -91,6 +100,13 @@ function makeEdgeVault(dir) {
     "Archive/Done/Done MOC.md": "---\ntype: project\nstatus: Complete\nprogress: 40\ncompleted: 2026-09-01\nkind: making\nsize: S\nnorthstar: done\n---\n# Done MOC\n",
     "Archive/Done2/Done2.md": "---\ntype: project\nstatus: completed\nlane: ready\nkind: making\nsize: S\n---\n",
     "Archive/Deep/a/b/c/Deep.md": "---\ntype: project\nlane: blocked\nprogress: 99.99\nkind: hardware\nsize: XL\nnorthstar: deep\nnext: deeper\nupdated: 2099-01-01\n---\n",
+    "Root Note.md": "---\ntype: project\nlane: ready\nprogress: 8\nkind: software\nsize: S\nnorthstar: at the root\nnext: x\ncreated: 2026-02-02\n---\n",
+    // never read: hidden folders, node_modules and Templates, at any depth
+    ".trash/Gone.md": "---\ntype: project\nlane: ready\n---\n",
+    "Projects/.hidden/Hidden.md": "---\ntype: project\nlane: ready\n---\n",
+    "node_modules/pkg/Readme.md": "---\ntype: project\nlane: ready\n---\n",
+    "Templates/Project.md": "---\ntype: project\nlane: ready\n---\n",
+    "Projects/templates/Other.md": "---\ntype: project\nlane: ready\n---\n",
   };
   for (const [rel, text] of Object.entries(notes)) {
     const full = path.join(dir, rel);
@@ -105,8 +121,42 @@ function makeEdgeVault(dir) {
   return dir;
 }
 
+// a folder with a settings note: title, folders (one nested, one missing, one outside), a bad links value, .obsidian
+function makeSettingsVault(dir) {
+  fs.rmSync(dir, { recursive: true, force: true });
+  const notes = {
+    "mission-control.md": "---\ntitle: \"Work & Play\"\nfolders:\n  - Work\n  - \"Work/Sub\"\n  - Missing\n  - ../outside\n  - \\Play\\\nlinks: Sometimes\nobsidianVault: My Vault\nout: Home/MC.html\n---\n# Settings\n",
+    "Work/Alpha.md": "---\ntype: project\nlane: ready\nprogress: 30\nkind: software\nsize: M\nnorthstar: a\nnext: b\ncreated: 2026-01-01\n---\n",
+    "Work/Sub/Beta.md": "---\ntype: project\nlane: waiting\nprogress: 60\nkind: making\nsize: S\nnorthstar: a\nnext: b\ncreated: 2026-01-02\n---\n",
+    "Play/Gamma.md": "---\ntype: project\nstatus: completed\ncompleted: 2026-03-03\nkind: athletics\nsize: L\nnorthstar: a\ncreated: 2026-01-03\n---\n",
+    "Elsewhere/Delta.md": "---\ntype: project\nlane: ready\nprogress: 5\nkind: career\nsize: S\nnorthstar: not in the folders\nnext: b\ncreated: 2026-01-04\n---\n",
+    "Root.md": "---\ntype: project\nlane: ready\nprogress: 5\nkind: career\nsize: S\nnorthstar: root is not in the folders\nnext: b\ncreated: 2026-01-05\n---\n",
+    ".obsidian/app.json": "{}",
+  };
+  for (const [rel, text] of Object.entries(notes)) {
+    const full = path.join(dir, rel);
+    fs.mkdirSync(path.dirname(full), { recursive: true });
+    fs.writeFileSync(full, text, "utf-8");
+  }
+  return dir;
+}
+
+// folder spellings that mean the same folder (./Work, Work//Sub, Work/./Sub, Play/), listed twice, and a note to read once
+function makeSpellingVault(dir) {
+  fs.rmSync(dir, { recursive: true, force: true });
+  const notes = {
+    "mission-control.md": "---\nfolders: [./Work, Work//Sub, Work/./Sub, Play/, Work]\n---\n",
+    "Work/Alpha.md": "---\ntype: project\nlane: ready\nprogress: 30\nkind: software\nsize: M\nnorthstar: a\nnext: b\ncreated: 2026-01-01\n---\n",
+    "Work/Sub/Beta.md": "---\ntype: project\nlane: waiting\nprogress: 60\nkind: making\nsize: S\nnorthstar: a\nnext: b\ncreated: 2026-01-02\n---\n",
+    "Play/Gamma.md": "---\ntype: project\nlane: ready\nprogress: 5\nkind: career\nsize: S\nnorthstar: a\nnext: b\ncreated: 2026-01-03\n---\n",
+  };
+  for (const [rel, text] of Object.entries(notes)) { const full = path.join(dir, rel); fs.mkdirSync(path.dirname(full), { recursive: true }); fs.writeFileSync(full, text, "utf-8"); }
+  return dir;
+}
+
 function diff(a, b) {
   const out = [];
+  if (a.settings && b.settings && JSON.stringify(a.settings) !== JSON.stringify(b.settings)) out.push("settings differ:\n    JS " + JSON.stringify(a.settings) + "\n    PY " + JSON.stringify(b.settings));
   if (JSON.stringify(a.warnings) !== JSON.stringify(b.warnings)) out.push("warnings differ:\n    JS " + JSON.stringify(a.warnings) + "\n    PY " + JSON.stringify(b.warnings));
   const n = Math.max(a.projects.length, b.projects.length);
   for (let i = 0; i < n; i++) { const x = JSON.stringify(a.projects[i]), y = JSON.stringify(b.projects[i]); if (x !== y) out.push("project " + i + ":\n    JS " + x + "\n    PY " + y); }
@@ -117,7 +167,7 @@ async function nodeParity(name, vaultDir) {
   const dump = path.join(OUT, name + ".py.json");
   py("--vault", vaultDir, "--check", "--dump", dump, "--today", TODAY);
   const expected = JSON.parse(fs.readFileSync(dump, "utf-8"));
-  const got = await P.collectVault(makeVault("v", readTree(vaultDir)), { today: TODAY });
+  const got = await P.collectVault(makeVault(path.basename(vaultDir), readTree(vaultDir, expected.settings.folders)), { today: TODAY });
   const d = diff(got, expected);
   ok(d.length === 0, `node parity on ${name}: ${expected.projects.length} projects, ${expected.warnings.length} warnings identical, order too`);
   d.slice(0, 10).forEach(x => console.log("    " + x));
@@ -125,13 +175,62 @@ async function nodeParity(name, vaultDir) {
 }
 
 async function main() {
-  console.log(`Mission Control tests · today ${TODAY} · TZ ${TZ} · vault ${VAULT}`);
+  console.log(`Mission Control tests · today ${TODAY} · TZ ${TZ} · folder ${VAULT}`);
   const edgeDir = makeEdgeVault(path.join(OUT, "edge-vault"));
+  const setDir = makeSettingsVault(path.join(OUT, "settings-vault"));
 
   console.log("1. Parity in Node");
   const realPy = await nodeParity("real vault", VAULT);
   const edgePy = await nodeParity("edge vault", edgeDir);
+  const setPy = await nodeParity("settings vault", setDir);
+  const spellPy = await nodeParity("folder spellings", makeSpellingVault(path.join(OUT, "spelling-vault")));
+  ok(spellPy.settings.folders.join("|") === "Work|Work/Sub|Play" && spellPy.projects.map(p => p.note).sort().join(",") === "Play/Gamma,Work/Alpha,Work/Sub/Beta",
+    `U. ./Work, Work//Sub, Work/./Sub and Play/ are the same folders as Work, Work/Sub and Play; each note read once (${spellPy.settings.folders.join(", ")})`);
+  {
+    // a folder that cannot be listed is skipped, as Python's os.walk does, and the rest is still read
+    const v = makeVault("locked", [{ path: "A/One.md", bytes: Buffer.from("---\ntype: project\nlane: ready\nkind: software\nsize: S\nnorthstar: a\nnext: b\ncreated: 2026-01-01\n---\n"), lastModified: 0 }, { path: "B", dir: true }]);
+    const b = await v.getDirectoryHandle("B"); b.entries = async function* () { const e = new Error("no"); e.name = "NotAllowedError"; throw e; };
+    let got = null; try { got = await P.collectVault(v, { today: TODAY }); } catch (e) { got = e; }
+    ok(got && got.projects && got.projects.length === 1, `U. a folder the page may not list is skipped, not fatal (${got && got.projects ? got.projects.length + " project" : got})`);
+  }
   ok(edgePy.warnings.length >= 12 && edgePy.projects.length >= 20, `edge vault exercises the rules (${edgePy.projects.length} projects, ${edgePy.warnings.length} warnings)`);
+  ok(edgePy.projects.some(p => p.note === "Root Note") && !edgePy.projects.some(p => ["Gone", "Hidden", "Readme", "Project", "Other"].includes(p.note.split("/").pop())),
+    "U. the whole folder is read, root included; hidden folders, node_modules and Templates (any depth, any case) are not");
+  ok(edgePy.settings.title === "MY PROJECTS" && edgePy.settings.links === "none" && edgePy.settings.vault === "edge-vault" && edgePy.projects.every(p => p.link === ""),
+    `U. no settings note: title MY PROJECTS, no .obsidian so no links (${JSON.stringify(edgePy.settings)})`);
+  {
+    const s = setPy.settings, notes = setPy.projects.map(p => p.note).sort().join(",");
+    ok(s.title === "Work & Play" && s.folders.join("|") === "Work|Work/Sub|Missing|../outside|Play" && notes === "Play/Gamma,Work/Alpha,Work/Sub/Beta",
+      `U. settings note: title, and only the listed folders are read, each note once (${notes})`);
+    ok(setPy.warnings.join("|") === "mission-control.md: folder '../outside' not found|mission-control.md: folder 'Missing' not found|mission-control.md: links 'sometimes' is not obsidian or none; using obsidian",
+      `U. a missing folder, a folder outside, and a bad links value are warnings: ${JSON.stringify(setPy.warnings)}`);
+    ok(s.links === "obsidian" && setPy.projects.every(p => p.link === "obsidian://open?vault=My%20Vault&file=" + encodeURIComponent(p.note)),
+      "U. .obsidian present: Obsidian links, with the vault name from the settings note, quoted");
+    const out = path.join(OUT, "settings-out");
+    py("--folder", setDir, "--check", "--today", TODAY);
+    ok(!fs.existsSync(path.join(setDir, "Home", "MC.html")), "U. --check writes nothing");
+    py("--folder", setDir, "--today", TODAY);
+    ok(fs.existsSync(path.join(setDir, "Home", "MC.html")), "U. the settings note's out decides where the page is written");
+    const outDir = path.join(OUT, "out-vault"), res = [];
+    for (const [out, ok1] of [["../escaped.html", false], ["Note.md", false], ["Home/", false], ["[a, b]", false], ["C:/x.html", false], ["Sub/Page.HTML", true]]) {
+      fs.rmSync(outDir, { recursive: true, force: true }); fs.mkdirSync(outDir, { recursive: true });
+      fs.writeFileSync(path.join(outDir, "mission-control.md"), "---\nout: " + out + "\n---\n");
+      fs.writeFileSync(path.join(outDir, "Note.md"), "---\ntype: project\nlane: ready\nkind: software\nsize: S\nnorthstar: a\nnext: b\ncreated: 2026-01-01\n---\n");
+      const log = py("--folder", outDir, "--today", TODAY);
+      const fine = ok1 ? fs.existsSync(path.join(outDir, "Sub", "Page.HTML")) && !/warning: mission-control.md: out/.test(log)
+        : fs.existsSync(path.join(outDir, "Mission Control.html")) && /warning: mission-control.md: out/.test(log) && fs.readFileSync(path.join(outDir, "Note.md"), "utf-8").startsWith("---");
+      res.push(out + (fine ? " ok" : " WRONG"));
+    }
+    ok(res.every(r => r.endsWith(" ok")) && !fs.existsSync(path.join(OUT, "escaped.html")), `U. out must be an .html path inside the folder, else a warning and the default: ${res.join("; ")}`);
+  }
+  {
+    // note text cannot break the built page: a title with <!--<script>, a note that says /*PARSER*/ and </script>
+    const injDir = path.join(OUT, "inject-vault");
+    fs.rmSync(injDir, { recursive: true, force: true }); fs.mkdirSync(injDir, { recursive: true });
+    fs.writeFileSync(path.join(injDir, "mission-control.md"), "---\ntitle: \"<!--<script> x\"\n---\n");
+    fs.writeFileSync(path.join(injDir, "Inj.md"), "---\ntype: project\nlane: ready\nkind: software\nsize: S\nnorthstar: \"/*PARSER*/ /*DATA*/ </script><!-- <script>\"\nnext: b\ncreated: 2026-01-01\n---\n");
+    py("--folder", injDir, "--out", path.join(OUT, "mc-inject.html"), "--today", TODAY);
+  }
   for (const [name, d] of [["real vault", realPy], ["edge vault", edgePy]]) {
     const js = P.cityStats(d.projects);
     ok(JSON.stringify(js) === JSON.stringify(d.stats), `city XP parity on ${name}: ${JSON.stringify(js)}`);
@@ -150,8 +249,10 @@ async function main() {
 
   console.log("2. Build");
   const page = path.join(OUT, "mc.html"), mirror = path.join(OUT, "mc-mirror.html");
+  const demo = path.join(OUT, "mc-demo.html");
   py("--vault", VAULT, "--out", page, "--today", TODAY);
   py("--vault", VAULT, "--out", mirror, "--today", TODAY, "--mirror");
+  py("--folder", path.join(ROOT, "examples", "sample-projects"), "--out", demo, "--today", TODAY, "--demo");
   const kb = fs.statSync(page).size / 1024;
   ok(kb < 5 * 1024, `page size ${kb.toFixed(0)} KB, under the 5 MB Sync cap`);
 
@@ -161,8 +262,10 @@ async function main() {
   const browser = await chromium.launch({ args: ["--use-gl=swiftshader", "--enable-unsafe-swiftshader", "--ignore-gpu-blocklist"] });
   const errors = [];
   const fakeSrc = fs.readFileSync(path.join(__dirname, "fake-vault.js"), "utf-8");
-  const encode = files => files.map(f => ({ path: f.path, b64: Buffer.from(f.bytes).toString("base64"), lastModified: f.lastModified }));
-  const realFiles = encode(readTree(VAULT)), edgeFiles = encode(readTree(edgeDir));
+  const encode = files => files.map(f => f.dir ? { path: f.path, dir: true } : ({ path: f.path, b64: Buffer.from(f.bytes).toString("base64"), lastModified: f.lastModified }));
+  const realFiles = encode(readTree(VAULT, realPy.settings.folders)), edgeFiles = encode(readTree(edgeDir));
+  // where a new note goes in the fake folder: the first folder the settings read, or the root
+  const HOME = (realPy.settings.folders[0] || "").split("/").filter(Boolean);
   const url = f => "file://" + (os.platform() === "win32" ? "/" : "") + f.replace(/\\/g, "/");
 
   async function open(file, init) {
@@ -172,7 +275,7 @@ async function main() {
     pg.on("console", m => { if (m.type() === "error") errors.push(path.basename(file) + ": " + m.text()); });
     pg.on("pageerror", e => errors.push(path.basename(file) + ": " + e.message));
     await pg.addInitScript(fakeSrc);
-    await pg.addInitScript(`window.__decode=fs=>fs.map(f=>({path:f.path,bytes:Uint8Array.from(atob(f.b64),c=>c.charCodeAt(0)),lastModified:f.lastModified}));`);
+    await pg.addInitScript(`window.__decode=fs=>fs.map(f=>f.dir?{path:f.path,dir:true}:({path:f.path,bytes:Uint8Array.from(atob(f.b64),c=>c.charCodeAt(0)),lastModified:f.lastModified}));`);
     if (init) await pg.addInitScript(init);
     await pg.goto(url(file));
     await pg.waitForFunction(() => window.MC && document.getElementById("src").textContent.length > 0);
@@ -189,7 +292,8 @@ async function main() {
     const s = await state(pg), t = await srcText(pg);
     ok(t.includes("SNAPSHOT FROM " + TODAY), `A. no vault connected: label reads "${t}"`);
     ok(s.projects.length === realPy.projects.length && s.buildings === realPy.projects.length, `A. snapshot draws ${s.buildings} buildings and ${await pg.locator(".card").count()} cards`);
-    ok(await pg.isVisible("#connect") && (await pg.textContent("#connect")) === "CONNECT VAULT", "A. Connect vault button shown");
+    ok(await pg.isVisible("#connect") && (await pg.textContent("#connect")) === "CONNECT FOLDER", "A. Connect folder button shown");
+    ok((await pg.textContent("#sub")) === realPy.settings.title.toUpperCase() + " · " + realPy.projects.length + " BUILDINGS", `A. the header carries the title from the settings: "${await pg.textContent("#sub")}"`);
     ok(await pg.isDisabled("#refresh"), "A. Refresh disabled until a vault is connected");
     await pg.waitForTimeout(800);
     await pg.screenshot({ path: path.join(OUT, "snapshot.png") });
@@ -199,26 +303,26 @@ async function main() {
   {
     const { ctx, pg } = await open(page);
     await pg.evaluate(() => { window.__noReload = 1; });
-    await stubPicker(pg, realFiles, "robin-personal");
+    await stubPicker(pg, realFiles, VNAME);
     await pg.click("#connect");
     await waitLive(pg);
     const s = await state(pg), t = await srcText(pg);
-    ok(s.mode === "live" && /^LIVE · robin-personal · REFRESHED \d/.test(t), `B. connected: "${t}"`);
+    ok(s.mode === "live" && t.startsWith("LIVE · " + VNAME + " · REFRESHED "), `B. connected: "${t}"`);
     const d = diff(s, realPy);
     ok(d.length === 0, `B. browser parity on the real vault: ${s.projects.length} projects, ${s.warnings.length} warnings identical to build.py`);
     d.slice(0, 10).forEach(x => console.log("    " + x));
-    ok((await pg.textContent("#connect")) === "CHANGE VAULT" && !(await pg.isDisabled("#refresh")), "B. buttons now read CHANGE VAULT and REFRESH");
+    ok((await pg.textContent("#connect")) === "CHANGE FOLDER" && !(await pg.isDisabled("#refresh")), "B. buttons now read CHANGE FOLDER and REFRESH");
     // edit one note, add one, then Refresh
     const target = realPy.projects.find(p => p.lane === "ready");
     const before = await pg.evaluate(() => MC.state().level);
-    await pg.evaluate(([note]) => {
+    await pg.evaluate(([note, HOME]) => {
       const parts = (note + ".md").split("/"); let n = FAKE._node; for (const p of parts.slice(0, -1)) n = n.children.get(p);
       const f = n.children.get(parts[parts.length - 1]).file;
       const txt = new TextDecoder().decode(f.bytes).replace(/^progress:.*$/m, "progress: 95");
       f.bytes = new TextEncoder().encode(txt); f.lastModified = Date.now();
-      const dir = FAKE._node.children.get("Projects");
+      let dir = FAKE._node; for (const p of HOME) dir = dir.children.get(p);
       dir.children.set("Zz New", { kind: "directory", name: "Zz New", children: new Map([["Zz New.md", { kind: "file", name: "Zz New.md", file: { bytes: new TextEncoder().encode("---\ntype: project\ncode: NEW\nname: Brand New\nnorthstar: n\nprogress: 100\nlane: ready\nkind: software\nsize: S\nnext: x\n---\n"), lastModified: Date.now() } }]]) });
-    }, [target.note]);
+    }, [target.note, HOME]);
     await pg.click("#refresh");
     await pg.waitForFunction(n => MC.state().projects.length === n, realPy.projects.length + 1);
     const card = await pg.textContent(`.card[data-id="${target.id}"] .m span`);
@@ -262,24 +366,24 @@ async function main() {
     await pg.click("#connect");
     await pg.waitForFunction(() => document.getElementById("src").classList.contains("err"));
     const s = await state(pg);
-    ok(/NOT THE VAULT/.test(await srcText(pg)) && s.projects.length === realPy.projects.length, `D. wrong folder: "${await srcText(pg)}", snapshot kept`);
+    ok(/NO PROJECT NOTES/.test(await srcText(pg)) && s.projects.length === realPy.projects.length && s.mode === "snapshot", `D. a folder with no project notes: "${await srcText(pg)}", snapshot kept`);
     await ctx.close();
   }
   // E. stored handle that needs one Allow click (the worst case for file:// pages)
   {
     const init = `window.MC_TEST_HANDLE_FILES=${JSON.stringify(realFiles)};document.addEventListener("DOMContentLoaded",()=>{});
-      Object.defineProperty(window,"MC_TEST_HANDLE",{configurable:true,get(){if(!this.__h){this.__h=makeFakeVault("robin-personal",__decode(MC_TEST_HANDLE_FILES));this.__h.perm="prompt";this.__h.requestPermission=async function(){window.__asked=(window.__asked||0)+1;this.perm="granted";return "granted"}}return this.__h}});`;
+      Object.defineProperty(window,"MC_TEST_HANDLE",{configurable:true,get(){if(!this.__h){this.__h=makeFakeVault(${JSON.stringify(VNAME)},__decode(MC_TEST_HANDLE_FILES));this.__h.perm="prompt";this.__h.requestPermission=async function(){window.__asked=(window.__asked||0)+1;this.perm="granted";return "granted"}}return this.__h}});`;
     const { ctx, pg } = await open(page, init);
-    await pg.waitForFunction(() => document.getElementById("connect").textContent === "ALLOW VAULT ACCESS");
+    await pg.waitForFunction(() => document.getElementById("connect").textContent === "ALLOW FOLDER ACCESS");
     ok(/SNAPSHOT FROM/.test(await srcText(pg)) && (await state(pg)).mode === "needs-permission", `E. stored handle, permission "prompt": "${await srcText(pg)}"`);
     await pg.click("#connect");
     await waitLive(pg);
-    ok((await state(pg)).mode === "live" && await pg.evaluate(() => window.__asked === 1), "E. one click on ALLOW VAULT ACCESS asks once and goes live");
+    ok((await state(pg)).mode === "live" && await pg.evaluate(() => window.__asked === 1), "E. one click on ALLOW FOLDER ACCESS asks once and goes live");
     await ctx.close();
   }
   // F. stored handle already allowed: live on load, no click
   {
-    const init = `window.MC_TEST_HANDLE_FILES=${JSON.stringify(realFiles)};Object.defineProperty(window,"MC_TEST_HANDLE",{configurable:true,get(){return this.__h||(this.__h=makeFakeVault("robin-personal",__decode(MC_TEST_HANDLE_FILES)))}});`;
+    const init = `window.MC_TEST_HANDLE_FILES=${JSON.stringify(realFiles)};Object.defineProperty(window,"MC_TEST_HANDLE",{configurable:true,get(){return this.__h||(this.__h=makeFakeVault(${JSON.stringify(VNAME)},__decode(MC_TEST_HANDLE_FILES)))}});`;
     const { ctx, pg } = await open(page, init);
     await waitLive(pg);
     ok((await state(pg)).mode === "live", `F. stored handle, permission "granted": live on load, "${await srcText(pg)}"`);
@@ -327,8 +431,18 @@ async function main() {
   // H. the mirror build, and a browser without folder access
   {
     const { ctx, pg } = await open(mirror);
-    ok(/PHONE MIRROR/.test(await srcText(pg)) && !(await pg.isVisible("#connect")) && !(await pg.isVisible("#refresh")), `H. mirror build: "${await srcText(pg)}", no buttons`);
+    ok(/SNAPSHOT ONLY/.test(await srcText(pg)) && !(await pg.isVisible("#connect")) && !(await pg.isVisible("#refresh")), `H. mirror build: "${await srcText(pg)}", no buttons`);
     await ctx.close();
+    const d = await open(demo);
+    const dt = await srcText(d.pg), strip = await d.pg.textContent("#since");
+    ok(/^DEMO CITY/.test(dt) && /DEMO CITY. CONNECT A FOLDER/.test(strip) && await d.pg.isVisible("#connect") && (await d.pg.evaluate(() => localStorage.getItem("mc-visit-v1:snap"))) === null,
+      `H. demo build: "${dt}", "${strip}", the demo city is never recorded as a visit`);
+    ok(await d.pg.evaluate(() => HANDLE_KEY === "vault-demo" && VISIT_KEY("live") === "mc-visit-demo-v1:live"), "H. the demo page keeps its own folder and visit records, apart from your page's (file:// pages share storage)");
+    await d.ctx.close();
+    const j = await open(path.join(OUT, "mc-inject.html"));
+    const js = await j.pg.evaluate(() => ({ sub: document.getElementById("sub").textContent, north: MC.state().projects[0].north }));
+    ok(js.sub.startsWith("<!--<SCRIPT> X") && js.north.includes("/*PARSER*/") && js.north.includes("</script>"), `H. note text cannot break the page: header "${js.sub}", the note text shown as written`);
+    await j.ctx.close();
     const o = await open(page, "delete window.showDirectoryPicker; delete Window.prototype.showDirectoryPicker;");
     ok(/NEEDS CHROME OR EDGE/.test(await srcText(o.pg)) && !(await o.pg.isVisible("#connect")), `H. no folder access (Firefox, Obsidian viewer): "${await srcText(o.pg)}"`);
     await o.ctx.close();
@@ -404,16 +518,16 @@ async function main() {
   // L. live: a project lands on Refresh. First live read is a first visit; the Refresh plays the moment
   {
     const { ctx, pg } = await open(page);
-    await stubPicker(pg, realFiles, "robin-personal");
+    await stubPicker(pg, realFiles, VNAME);
     await pg.click("#connect");
     await waitLive(pg);
     const target = realPy.projects.filter(p => p.lane !== "landed").sort((a, b) => b.floors - a.floors)[0];
     const lv0 = await pg.evaluate(() => MC.state().level);
-    await pg.evaluate(([note]) => {
+    await pg.evaluate(([note, TODAY]) => {
       const parts = (note + ".md").split("/"); let n = FAKE._node; for (const p of parts.slice(0, -1)) n = n.children.get(p);
       const f = n.children.get(parts[parts.length - 1]).file;
-      f.bytes = new TextEncoder().encode(new TextDecoder().decode(f.bytes).replace(/^status:.*$/m, "status: completed\ncompleted: 2026-10-11"));
-    }, [target.note]);
+      f.bytes = new TextEncoder().encode(new TextDecoder().decode(f.bytes).replace(/^status:.*$/m, "status: completed\ncompleted: " + TODAY));
+    }, [target.note, TODAY]);
     await pg.click("#refresh");
     await pg.waitForFunction(() => MC.state().show.landings === 1, null, { timeout: 20000 });
     const s = await pg.evaluate(() => MC.state());
@@ -516,7 +630,7 @@ async function main() {
   // P. a building never moves: progress, landing, parking and a new project leave every other building where it was
   {
     const { ctx, pg } = await open(page);
-    await stubPicker(pg, realFiles, "robin-personal");
+    await stubPicker(pg, realFiles, VNAME);
     await pg.click("#connect");
     await waitLive(pg);
     const where = () => pg.evaluate(() => Object.fromEntries(MC.state().towers.map(t => [t.id, [t.x, t.z, t.lot]])));
@@ -528,7 +642,7 @@ async function main() {
     await pg.click("#refresh"); await pg.waitForFunction(([id, v]) => MC.state().projects.find(p => p.id === id).progress === v, [target.id, target.progress + 20]);
     const w1 = await where();
     ok(JSON.stringify(w1) === JSON.stringify(w0), `P. ${target.code} +20% on Refresh: every building stays on its lot (${target.code} lot ${w0[target.id][2]})`);
-    await edit(target.note, `t => t.replace(/^status:.*$/m, "status: completed\\ncompleted: 2026-10-11")`);
+    await edit(target.note, `t => t.replace(/^status:.*$/m, "status: completed\\ncompleted: ${TODAY}")`);
     await pg.click("#refresh"); await pg.waitForFunction(id => MC.state().projects.find(p => p.id === id).lane === "landed", target.id);
     const w2 = await where();
     ok(JSON.stringify(w2) === JSON.stringify(w0), `P. ${target.code} lands on Refresh: it stays on lot ${w2[target.id][2]}, nothing else moves`);
@@ -536,8 +650,8 @@ async function main() {
     await edit(other.note, `t => t.replace(/^status:.*$/m, "status: parked")`);
     await pg.click("#refresh"); await pg.waitForFunction(id => MC.state().projects.find(p => p.id === id).lane === "parked", other.id);
     ok(JSON.stringify(await where()) === JSON.stringify(w0), `P. ${other.code} parked on Refresh: no building moves`);
-    await pg.evaluate(() => { const dir = FAKE._node.children.get("Projects");
-      dir.children.set("Zz New", { kind: "directory", name: "Zz New", children: new Map([["Zz New.md", { kind: "file", name: "Zz New.md", file: { bytes: new TextEncoder().encode("---\ntype: project\ncode: NEW\nname: Brand New\nnorthstar: n\nprogress: 0\nlane: ready\nkind: software\nsize: S\nnext: x\ncreated: 2099-01-01\n---\n"), lastModified: Date.now() } }]]) }); });
+    await pg.evaluate(HOME => { let dir = FAKE._node; for (const p of HOME) dir = dir.children.get(p);
+      dir.children.set("Zz New", { kind: "directory", name: "Zz New", children: new Map([["Zz New.md", { kind: "file", name: "Zz New.md", file: { bytes: new TextEncoder().encode("---\ntype: project\ncode: NEW\nname: Brand New\nnorthstar: n\nprogress: 0\nlane: ready\nkind: software\nsize: S\nnext: x\ncreated: 2099-01-01\n---\n"), lastModified: Date.now() } }]]) }); }, HOME);
     await pg.click("#refresh"); await pg.waitForFunction(n => MC.state().towers.length === n, realPy.projects.length + 1);
     const w4 = await where(), moved = Object.keys(w0).filter(id => JSON.stringify(w4[id]) !== JSON.stringify(w0[id]));
     ok(moved.length === 0 && w4["brand-new"][2] === realPy.projects.length + 1, `P. a new project takes the next lot (${w4["brand-new"][2]}); none of the others move`);
@@ -564,10 +678,11 @@ async function main() {
     const { ctx, pg } = await open(page);
     await pg.waitForTimeout(600);
     const s = await pg.evaluate(() => MC.state());
-    // free lots: four per block, less the square and the five landmark blocks (blocks 9 to 13, art pass 3)
-    const needFor = n => { let K = 1; const free = K => 4 * Math.max(0, K - 1 - Math.min(5, Math.max(0, K - 9))); while (free(K) < n + 3) K++; return K; };
-    const L = s.level, byLevel = 9 + 2 * Math.max(0, L - 2), need = needFor(s.towers.length);
-    ok(s.street.blocks === Math.max(byLevel, need) && s.street.onRoad, `R. level ${L}: ${s.street.blocks} blocks open (9 + 2 a level from level 3), every block has a road on all four sides`);
+    // free lots: four per block, less the square and the landmark blocks standing (art pass 3)
+    const lmBlocks = Object.values(s.landmarks).filter(v => v.on).map(v => v.block);
+    const needFor = n => { let K = 1; const free = K => { let c = 0; for (let b = 1; b < K; b++) if (!lmBlocks.includes(b)) c += 4; return c; }; while (free(K) < n + 3) K++; return K; };
+    const L = s.level, byLevel = 9 + 2 * Math.max(0, L - 2), need = needFor(s.towers.length), lmNeed = lmBlocks.length ? Math.max(...lmBlocks) + 1 : 0;
+    ok(s.street.blocks === Math.max(byLevel, need, lmNeed) && s.street.onRoad, `R. level ${L}: ${s.street.blocks} blocks open (9 + 2 a level from level 3), every block has a road on all four sides`);
     ok(s.beyond === 0, `R. no skyline towers: nothing stands outside the open blocks (${s.beyond} parts beyond the edge)`);
     const pl = await pg.evaluate(() => { const out = []; for (let lv = 1; lv <= 40; lv++) out.push(MC.plan(21, lv)); return out; });
     ok(pl.every((p, i) => p.blocks === Math.max(9 + 2 * Math.max(0, i - 1), 7)), "R. blocks by level 1 to 40: " + [1, 3, 10, 22, 40].map(l => `L${l} ${pl[l - 1].blocks}`).join(", ") + ". No cap");
@@ -617,7 +732,8 @@ async function main() {
       ps.forEach(p => p.days = 40); MC.render({ projects: ps, warnings: [] }); out.push(MC.state().street.cars);
       ps.forEach((p, i) => p.days = i < 5 ? 2 : 40); MC.render({ projects: ps, warnings: [] }); out.push(MC.state().street.cars);
       ps.forEach(p => p.days = 0); MC.render({ projects: ps, warnings: [] }); out.push(MC.state().street.cars); return out; });
-    ok(traffic[0] === 4 && traffic[1] === 19 && traffic[2] === 48, `R. traffic follows activity: no project moved this week ${traffic[0]} cars, 5 moved ${traffic[1]}, all moved ${traffic[2]} (the most)`);
+    const most = Math.min(48, 4 + 3 * s.projects.length);
+    ok(traffic[0] === 4 && traffic[1] === 19 && traffic[2] === most, `R. traffic follows activity: no project moved this week ${traffic[0]} cars, 5 moved ${traffic[1]}, all ${s.projects.length} moved ${traffic[2]} (4 + 3 a project, 48 at most)`);
     // a small city at level 1: plain roads only
     const small = await pg.evaluate(() => { const ps = JSON.parse(JSON.stringify(MC.state().projects)).slice(0, 3); ps.forEach(p => { p.lane = "ready"; p.progress = 10; p.lit = Math.floor(p.floors / 10); }); MC.render({ projects: ps, warnings: [] }); return MC.state(); });
     ok(small.level === 1 && small.street.blocks === 9 && small.street.tier === 1 && small.street.marks === 0 && small.street.neonEdges === 0 && small.hq.floors === 1 && small.hq.tower === 0, `R. level 1: the square and ring 1 (9 blocks), plain roads, a small domed HQ with no tower yet`);
@@ -642,7 +758,7 @@ async function main() {
     const sb = await pg.evaluate(() => MC.state());
     // art pass 3: the hero pieces (five landmarks at about 2,000 triangles, 5 train cars at 900, 10 hover cars at 600) add about
     // 20K to this stress city, which was 144K in 2b. The 150K line holds for the real city (33K today) and up to roughly 50 landed XL
-    // projects; this case is checked against 175K. See the vault note, art pass 3 status.
+    // projects; this case is checked against 175K. See docs/city-rules.md, Performance.
     ok(sb.level > 60 && sb.perf.calls < 600 && sb.perf.tris < 175000 && sb.street.onRoad && sb.beyond === 0, `R. a very big city (61 XL landed, level ${sb.level}, ${sb.street.blocks} blocks): ${sb.perf.calls} draw calls, ${Math.round(sb.perf.tris / 1000)}K triangles (under 175K; the 150K line is for the real city)`);
     await pg.evaluate(() => MC.setQuality("high")); await pg.waitForTimeout(400);
     const sbh = await pg.evaluate(() => MC.state());
@@ -665,8 +781,12 @@ async function main() {
     const LM = s.landmarks, built = Object.keys(LM).filter(k => LM[k].on), unbuilt = Object.keys(LM).filter(k => !LM[k].on);
     ok(Object.keys(LM).length === 5 && built.join() === Object.keys(lk).filter(k => lk[k] > 0).join() && unbuilt.every(k => LM[k].x === undefined), `S. a landmark stands only for a kind that has landed, nothing shows for the others: built ${built.join(", ") || "none"}; not yet ${unbuilt.join(", ")}`);
     const f = LM.making;
-    ok(f.on && f.hero && f.n0 === realPy.projects.filter(p => p.created && p.created <= "2026-10-12").length && f.block >= Math.floor((f.n0 + 3) / 4) + 1 && f.block < Math.floor((f.n0 + 3) / 4) + 7 && f.date === "2026-10-12",
-      `S. the factory took block ${f.block} at the edge of the city as it was on ${f.date} (${f.n0} projects by then, so the first free block is ${Math.floor((f.n0 + 3) / 4) + 1}, a seeded pick among the next six)`);
+    const lDate = p => (/^\d{4}-\d{2}-\d{2}$/.test(p.completed) ? p.completed : "") || p.created || "";
+    const mDate = realPy.projects.filter(p => p.kind === "making" && p.lane === "landed").map(lDate).sort()[0];
+    const before = Object.entries(LM).filter(([k, v]) => v.on && k !== "making" && (v.date < mDate || (v.date === mDate && k < "making"))).map(([, v]) => v.block);
+    let first = 1; for (let room = 0; room < f.n0; first++) if (!before.includes(first)) room += 4;
+    ok(f.on && f.hero && f.n0 === realPy.projects.filter(p => p.created && p.created <= mDate).length && f.block >= first && f.cands.includes(f.block) && f.date === mDate,
+      `S. the factory took block ${f.block} at the edge of the city as it was on ${f.date} (${f.n0} projects by then, so the first free block is ${first}, a seeded pick among the candidates ${f.cands.join(", ")})`);
     const li = await pg.evaluate(() => [...document.querySelectorAll("#landmarks li")].map(l => l.className + ":" + l.textContent.trim()));
     ok(li.length === 5 && li.filter(x => x.startsWith("done")).length === built.length && li.every(x => x.startsWith("done") || /landing builds it/.test(x)), `S. the unlocks panel lists the five landmarks: ${li.map(x => x.replace(/:/, " ")).join(" · ")}`);
     const bw = await pg.evaluate(() => [...document.querySelectorAll("#landmarks li b")].map(b => b.scrollWidth <= b.clientWidth + 1));
@@ -674,24 +794,25 @@ async function main() {
     // a landmark block is never a project lot, and the city still never moves a building when it grows or when a landmark is added
     const pl = await pg.evaluate(() => { const out = []; for (let lv = 1; lv <= 40; lv++) out.push(MC.plan(45, lv, true)); return out; });
     const noLm = await pg.evaluate(() => MC.plan(45, 1, false));
-    ok(pl.every(p => p.landmarks.join() === `making@${f.block}`) && pl.every(p => p.lots.join("|") === pl[0].lots.join("|")) && pl[0].lots.slice(0, 21).join("|") === noLm.lots.slice(0, 21).join("|") && pl[0].lots.slice(0, 21).join("|") === (await pg.evaluate(() => MC.plan(21, 1).lots.join("|"))),
-      `S. 45 projects with the factory on block ${f.block}: the same 45 lots at every level, today's 21 exactly where they are without any landmark, the later ones skip the block`);
+    const n0 = f.n0;
+    ok(pl.every(p => p.landmarks.includes(`making@${f.block}`)) && pl.every(p => p.lots.join("|") === pl[0].lots.join("|")) && pl[0].lots.slice(0, n0).join("|") === noLm.lots.slice(0, n0).join("|") && pl[0].lots.slice(0, n0).join("|") === (await pg.evaluate(n => MC.plan(n, 1).lots.join("|"), n0)),
+      `S. 45 projects with the factory on block ${f.block}: the same 45 lots at every level, the ${n0} started by its landing exactly where they are without any landmark, the later ones skip the block`);
     // the train is one train: a head, middle cars and a tail, coupled close
     ok(s.trains.n === 3 && s.trains.hero === 3 && s.trains.roles.join() === "tail,mid,head", `S. the monorail runs one train of ${s.trains.n} coupled cars: ${s.trains.roles.join(", ")}`);
     const gap = await pg.evaluate(() => { const L = trains[0].curve.getLength(); return +((trains[1].u0 - trains[0].u0) * L).toFixed(2); });
     ok(gap > 2.6 && gap < 2.8, `S. cars ${gap} apart along the rail (2.6 long, 0.12 gap)`);
     ok(s.smoke === 12, `S. the factory's three stacks smoke (${s.smoke} puffs)`);
     // a first landing of another kind puts its landmark on a block of its own, at the edge, and the factory does not move
-    const hw = await pg.evaluate(() => { const ps = JSON.parse(JSON.stringify(MC.state().projects)); const h = ps.find(p => p.kind === "hardware" && p.lane !== "landed"); h.lane = "landed"; h.progress = 100; h.lit = h.floors; h.completed = "2026-10-12"; MC.render({ projects: ps, warnings: [] }); const st = MC.state(); return { lm: st.landmarks, towers: st.towers.map(t => t.id + "@" + t.x + "," + t.z) }; });
+    const hw = await pg.evaluate(TODAY => { const ps = JSON.parse(JSON.stringify(MC.state().projects)); const h = ps.find(p => p.kind === "hardware" && p.lane !== "landed"); h.lane = "landed"; h.progress = 100; h.lit = h.floors; h.completed = TODAY; MC.render({ projects: ps, warnings: [] }); const st = MC.state(); return { lm: st.landmarks, towers: st.towers.map(t => t.id + "@" + t.x + "," + t.z) }; }, TODAY);
     const t0 = s.towers.map(t => t.id + "@" + t.x + "," + t.z);
     ok(hw.lm.hardware.on && hw.lm.hardware.block !== hw.lm.making.block && hw.lm.making.block === f.block && hw.towers.join("|") === t0.join("|"), `S. a hardware landing: the radio telescope appears on block ${hw.lm.hardware.block}, the factory stays on ${hw.lm.making.block}, no building moved`);
     ok(hw.lm.hardware.near >= 2 && hw.lm.hardware.weights.some(w => w === 0), `S. the telescope keeps its distance from the factory: block ${hw.lm.hardware.block}, ${hw.lm.hardware.near} blocks away; the six candidates ${hw.lm.hardware.cands.join(", ")} weighed ${hw.lm.hardware.weights.join(", ")}`);
     // everything landed: five landmarks, five blocks, hover cars; budgets
-    const full = await pg.evaluate(() => { const ps = JSON.parse(JSON.stringify(MC.state().projects)); ps.forEach(p => { if (p.lane !== "landed") { p.lane = "landed"; p.progress = 100; p.lit = p.floors; p.completed = "2026-10-12"; } }); MC.render({ projects: ps, warnings: [] }); return MC.state(); });
+    const full = await pg.evaluate(TODAY => { const ps = JSON.parse(JSON.stringify(MC.state().projects)); ps.forEach(p => { if (p.lane !== "landed") { p.lane = "landed"; p.progress = 100; p.lit = p.floors; p.completed = TODAY; } }); MC.render({ projects: ps, warnings: [] }); return MC.state(); }, TODAY);
     const blocks = Object.values(full.landmarks).map(v => v.block);
     ok(full.level >= 9 && full.fliers.n === 10 && full.fliers.hero === 10 && Object.values(full.landmarks).every(v => v.on && v.hero) && new Set(blocks).size === 5 && full.trains.hero === full.trains.n, `S. everything landed (level ${full.level}): five landmarks on five blocks (${blocks.join(", ")}), ${full.fliers.hero} hover cars flying, ${full.trains.hero} train cars`);
     const near = Object.entries(full.landmarks).map(([k, v]) => [k, v.block, v.near]);
-    ok(near.every(([, , n]) => n === null || n >= 2) && full.landmarks.making.block === 10, `S. no two landmarks touch, even at a corner (block and distance to the nearest earlier one: ${near.map(([k, b, n]) => k + " " + b + (n === null ? " first" : " at " + n)).join(", ")}); the factory keeps block 10`);
+    ok(near.every(([, , n]) => n === null || n >= 2) && full.landmarks.making.block === f.block, `S. no two landmarks touch, even at a corner (block and distance to the nearest earlier one: ${near.map(([k, b, n]) => k + " " + b + (n === null ? " first" : " at " + n)).join(", ")}); the factory keeps block ${f.block}`);
     ok(full.perf.calls < 600 && full.perf.tris < 150000 && full.beyond === 0, `S. with every hero piece in: ${full.perf.calls} draw calls, ${Math.round(full.perf.tris / 1000)}K triangles, nothing outside the open blocks`);
     await pg.evaluate(() => MC.view(Math.PI / 4, 1, 60)); await pg.waitForTimeout(400);
     await pg.screenshot({ path: path.join(OUT, "landmarks-all.png") });
@@ -723,17 +844,17 @@ async function main() {
   {
     const { ctx, pg } = await open(page);
     await pg.evaluate(() => { window.__noReload = 1; });
-    await stubPicker(pg, realFiles, "robin-personal");
+    await stubPicker(pg, realFiles, VNAME);
     await pg.click("#connect");
     await waitLive(pg);
     const lk = realPy.stats.landed_kinds, kind = Object.keys(lk).find(k => lk[k] === 0 && realPy.projects.some(p => p.kind === k && p.lane !== "landed"));
     const target = realPy.projects.find(p => p.kind === kind && p.lane !== "landed");
     const before = await pg.evaluate(k => MC.state().landmarks[k], kind);
-    await pg.evaluate(([note]) => {
+    await pg.evaluate(([note, TODAY]) => {
       const parts = (note + ".md").split("/"); let n = FAKE._node; for (const p of parts.slice(0, -1)) n = n.children.get(p);
       const f = n.children.get(parts[parts.length - 1]).file;
-      f.bytes = new TextEncoder().encode(new TextDecoder().decode(f.bytes).replace(/^status:.*$/m, "status: completed\ncompleted: 2026-10-12"));
-    }, [target.note]);
+      f.bytes = new TextEncoder().encode(new TextDecoder().decode(f.bytes).replace(/^status:.*$/m, "status: completed\ncompleted: " + TODAY));
+    }, [target.note, TODAY]);
     await pg.click("#refresh");
     await pg.waitForFunction(() => MC.state().show.landmarks === 1, null, { timeout: 25000 });
     const s = await pg.evaluate(k => { const s = MC.state(); return { lm: s.landmarks[k], landings: s.show.landings, toast: document.getElementById("toast").textContent.replace(/\s+/g, " "), stats: s.stats }; }, kind);
@@ -744,6 +865,41 @@ async function main() {
     ok(risen > 0.95, `S. the ${s.lm.name.toLowerCase()} has risen in (scale ${risen})`);
     await pg.evaluate(() => MC.view(Math.PI / 4, 1, 60)); await pg.waitForTimeout(300);
     await pg.screenshot({ path: path.join(OUT, "landmark-unlock.png") });
+    await ctx.close();
+  }
+  // V. a first landing of a kind (dated today) never moves a building, even when an earlier landmark stands inside the
+  // city: the edge counts a landmark's block as full. The case from the review, then 40 seeded random cities
+  {
+    const { ctx, pg } = await open(page);
+    const r = await pg.evaluate(async TODAY => {
+      const day = (d0, n) => { const t = new Date(d0 + "T00:00:00Z"); t.setUTCDate(t.getUTCDate() + n); return t.toISOString().slice(0, 10); };
+      const SZ = { S: 6, M: 10, L: 16, XL: 24 }, KINDS = ["software", "making", "hardware", "career", "athletics"];
+      const mk = (id, kind, created, size, extra) => Object.assign({ id, code: id.slice(0, 3).toUpperCase(), name: id, lane: "ready", progress: 10, north: "n", next: "x", wait: "", updated: TODAY, created, completed: "", stale: 0, days: 0, area: "", kind, size, floors: SZ[size], lit: 1, note: id, link: "" }, extra || {});
+      const where = () => Object.fromEntries(MC.state().towers.map(t => [t.id, t.x + "," + t.z]));
+      const lmBlocks = () => Object.fromEntries(Object.entries(MC.state().landmarks).filter(([, v]) => v.on).map(([k, v]) => [k, v.block]));
+      const land = (ps, id) => ps.map(p => p.id === id ? { ...p, lane: "landed", progress: 100, lit: p.floors, completed: TODAY } : p);
+      const check = (ps, id) => { MC.render({ projects: ps, warnings: [] }); const w0 = where(), l0 = lmBlocks();
+        MC.render({ projects: land(ps, id), warnings: [] }); const w1 = where(), l1 = lmBlocks();
+        return { moved: Object.keys(w0).filter(k => w0[k] !== w1[k]).length, lmMoved: Object.keys(l0).filter(k => l0[k] !== l1[k]).length, newLm: Object.keys(l1).length > Object.keys(l0).length }; };
+      const out = {};
+      const base = [mk("shelf", "making", "2026-01-01", "S", { name: "Shelf", lane: "landed", progress: 100, lit: 6, completed: "2026-01-11" })];
+      for (let i = 1; i <= 12; i++) base.push(mk("p" + i, "software", day("2026-01-01", 7 * i), "S", { name: "P" + String(i).padStart(2, "0") }));
+      out.review = check(base, "p1");
+      let seed = 7; const rnd = () => (seed = (seed * 1103515245 + 12345) % 2147483648) / 2147483648;
+      let moved = 0, lmMoved = 0, newLm = 0;
+      for (let c = 0; c < 40; c++) {
+        const n = 6 + Math.floor(rnd() * 30), ps = [];
+        for (let i = 0; i < n; i++) ps.push(mk("q" + i, KINDS[Math.floor(rnd() * 5)], day("2026-01-01", Math.floor(rnd() * 280)), ["S", "M", "L", "XL"][Math.floor(rnd() * 4)]));
+        const early = ps[Math.floor(rnd() * n)]; Object.assign(early, { lane: "landed", progress: 100, lit: early.floors, completed: day(early.created, 3) });
+        const cand = ps.filter(p => p.lane !== "landed" && p.kind !== early.kind);
+        if (!cand.length) continue;
+        const x = check(ps, cand[Math.floor(rnd() * cand.length)].id); moved += x.moved; lmMoved += x.lmMoved; newLm += x.newLm ? 1 : 0;
+      }
+      Object.assign(out, { moved, lmMoved, newLm });
+      return out;
+    }, TODAY);
+    ok(r.review.moved === 0 && r.review.lmMoved === 0 && r.review.newLm, `V. the review's case: the data spire arrives with the factory inside the city, ${r.review.moved} buildings moved`);
+    ok(r.moved === 0 && r.lmMoved === 0 && r.newLm > 30, `V. 40 random cities, one first landing each (${r.newLm} new landmarks): ${r.moved} buildings and ${r.lmMoved} landmarks moved`);
     await ctx.close();
   }
   // T. art pass 4: post-processing (filmic tone mapping, bloom on the lights only, a vignette) behind a quality switch that is
@@ -781,7 +937,7 @@ async function main() {
     ok(lm.making && lm.making.on && lm.making.hero, "T. the factory still stands in its own colours (landmarks, the train and the hover cars are not in the wall palette)");
     // progression: level 1 dark and glow-free, today in between, level 10 full
     const L6 = s;
-    ok(L6.level === 6 && L6.prog.k > 0.5 && L6.prog.k < 0.6 && L6.post.strength > 0.5 && L6.post.strength < 1.6 && L6.lit > 0.7 && L6.lit < 1, `T. today's level ${L6.level} city sits between dark and full neon: windows at ${L6.lit}, neon at ${L6.prog.neon}, glow strength ${L6.post.strength}`);
+    ok(L6.level > 1 && L6.level < 10 && L6.prog.k > 0 && L6.prog.k < 1 && L6.post.strength > 0 && L6.post.strength < 1.6 && L6.lit > 0.45 && L6.lit < 1, `T. today's level ${L6.level} city sits between dark and full neon: windows at ${L6.lit}, neon at ${L6.prog.neon}, glow strength ${L6.post.strength}`);
     const atLevel = lv => pg.evaluate(async lv => { const base = JSON.parse(JSON.stringify(MC.state().projects)); const ps = []; let xp = 0, k = 0;
       if (lv === 1) { const q = JSON.parse(JSON.stringify(base[0])); q.lane = "ready"; q.progress = 10; q.lit = 1; ps.push(q); }
       else while (xp < (lv - 1) * 30 + 1) { const q = JSON.parse(JSON.stringify(base[k % base.length])); q.id = "L" + k; q.code = "L" + k; q.lane = "landed"; q.progress = 100; q.size = "XL"; q.floors = 24; q.lit = 24; q.created = "2026-01-" + String(1 + k % 28).padStart(2, "0"); ps.push(q); xp += 48; k++; }

@@ -1,0 +1,39 @@
+# Builds the demo page from examples/sample-projects and attaches it to a GitHub Release.
+# Push a tag that starts with v (for example v1.1.0) to make a release. Run it by hand to get the page as a build artifact.
+name: Release page
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  page:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # --today is fixed to the sample's own date, so the demo city never looks stale
+      - name: Build the demo page
+        run: python3 build.py --folder examples/sample-projects --demo --today 2026-10-20 --out dist/mission-control.html
+
+      - name: Keep it as a build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: mission-control
+          path: dist/mission-control.html
+
+      - name: Attach it to the release
+        if: startsWith(github.ref, 'refs/tags/')
+        env:
+          GH_TOKEN: ${{ github.token }}
+        # a release made by hand for this tag gets the file added; otherwise the release is created
+        run: |
+          if gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1; then
+            gh release upload "$GITHUB_REF_NAME" dist/mission-control.html --clobber
+          else
+            gh release create "$GITHUB_REF_NAME" dist/mission-control.html --title "$GITHUB_REF_NAME" --generate-notes
+          fi

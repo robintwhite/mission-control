@@ -141,12 +141,12 @@ footer{font-family:var(--mono);font-size:11px;color:var(--dim);letter-spacing:.0
 <div class="wrap">
   <header class="banner">
     <div class="sun" aria-hidden="true"></div><div class="hz" aria-hidden="true"></div><div class="floor" aria-hidden="true"><i></i></div>
-    <span class="sub" id="sub">ROBIN'S PROJECTS</span>
+    <span class="sub" id="sub">MY PROJECTS</span>
     <h1>Mission Control</h1>
     <div class="counts" id="counts"></div>
   </header>
   <div class="bar">
-    <button id="connect" type="button" hidden>CONNECT VAULT</button>
+    <button id="connect" type="button" hidden>CONNECT FOLDER</button>
     <button id="refresh" type="button" hidden disabled>⟳ REFRESH</button>
     <span class="src snap" id="src" role="status"></span>
     <details class="warn" id="warn"><summary id="warnsum">0 WARNINGS</summary><ul id="warnlist"></ul></details>
@@ -186,7 +186,7 @@ footer{font-family:var(--mono);font-size:11px;color:var(--dim);letter-spacing:.0
     </div>
   </div>
   <div class="cards" id="cards"></div>
-  <footer>EVERYTHING HERE COMES FROM EACH PROJECT NOTE'S FRONTMATTER (northstar, progress, lane, kind, size, next, waiting_on). EDIT THE NOTE, THEN PRESS REFRESH. THE PAGE READS THE VAULT ITSELF ONCE CONNECTED.</footer>
+  <footer>EVERYTHING HERE COMES FROM EACH PROJECT NOTE'S FRONTMATTER (northstar, progress, lane, kind, size, next, waiting_on). EDIT THE NOTE, THEN PRESS REFRESH. THE PAGE READS THE FOLDER ITSELF ONCE CONNECTED. NOTHING LEAVES THIS BROWSER.</footer>
 </div>
 <script>
 /*THREE*/
@@ -215,14 +215,14 @@ const KIND={software:"SOFTWARE",making:"MAKING",hardware:"HARDWARE",career:"CARE
 const $=id=>document.getElementById(id);
 const esc=s=>String(s).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
 const plural=(n,w)=>`${n} ${w}${n===1?"":"S"}`;
-let PROJECTS=[],WARNINGS=[],STATS={lit:0,bonus:0,xp:0,level:1,per_level:30},LEVEL=1,selected=null;
+let PROJECTS=[],WARNINGS=[],SETTINGS={title:"MY PROJECTS",folders:[],links:"none",vault:""},STATS={lit:0,bonus:0,xp:0,level:1,per_level:30},LEVEL=1,selected=null;
 const byLane=l=>PROJECTS.filter(p=>p.lane===l).sort((a,b)=>b.progress-a.progress);
 const store={get(k){try{return localStorage.getItem(k)}catch(e){return null}},set(k,v){try{localStorage.setItem(k,v)}catch(e){}}};
 
 // ---------- panels: counts, HUD, cards, attention list, warnings ----------
 function renderPanels(){
   const order=["ready","waiting","blocked","parked","landed"].filter(l=>l!=="parked"||PROJECTS.some(p=>p.lane==="parked"));
-  $("sub").textContent=`ROBIN'S PROJECTS · ${PROJECTS.length} BUILDINGS`;
+  $("sub").textContent=`${String(SETTINGS.title).toUpperCase()} · ${PROJECTS.length} BUILDINGS`;
   $("counts").innerHTML=order.map(l=>`<div class="c-${l}"><b>${byLane(l).length}</b>${LANE[l]}</div>`).join("");
   STATS=MCParser.cityStats(PROJECTS);LEVEL=STATS.level;
   const per=STATS.per_level,nextAt=LEVEL*per,into=STATS.xp-(LEVEL-1)*per;
@@ -252,13 +252,13 @@ function deselect(){if(!PROJECTS.length)return;selected=null;deselected=true;
     <dl class="kv"><dt>LANDED</dt><dd>${STATS.landed||0} of ${PROJECTS.length}</dd><dt>ACTIVE</dt><dd>${STATS.active7||0} projects moved this week · ${carCount()} cars</dd><dt>NEXT LEVEL</dt><dd>${esc(unlockText(LEVEL+1))}</dd></dl>`;
   if(window.drawBoard)drawBoard()}
 function select(id,focus){const p=PROJECTS.find(x=>x.id===id);
-  if(!p){selected=null;$("detail").innerHTML=`<div class="eyebrow">NO BUILDINGS</div><h2>No project notes found</h2><div class="north">Check the warnings, or that the connected folder is the vault.</div>`;return}
+  if(!p){selected=null;$("detail").innerHTML=`<div class="eyebrow">NO BUILDINGS</div><h2>No project notes found</h2><div class="north">Check the warnings, or that the connected folder holds your project notes.</div>`;return}
   selected=id;deselected=false;const n=p.lit,N=p.floors,left=N-n;
   document.querySelectorAll(".card").forEach(c=>c.classList.toggle("sel",c.dataset.id===id));
   $("detail").innerHTML=`<div class="eyebrow">BUILDING ${esc(p.code)} · ${KIND[p.kind]||"NO KIND"} · SIZE ${esc(p.size)}${lotOf(p.id)?" · LOT "+lotOf(p.id):""}</div><h2>${esc(p.name)}</h2><span class="flag f-${p.lane}">${LANE[p.lane]}</span><div class="north">${esc(p.north)}</div>
     <div class="floors">${Array.from({length:N},(_,i)=>`<i class="${i<n?"on":""}"></i>`).join("")}</div>
     <div class="meterline"><span>${n} OF ${N} FLOORS BUILT${p.lane!=="landed"?` · ${left} MORE = +${left} XP · LANDING +${N} XP`:` · LANDED +${N} XP`}</span><b>${p.progress}%</b></div>
-    <dl class="kv"><dt>NEXT</dt><dd>${esc(p.next||"Topped out "+(p.completed||""))}</dd>${p.wait?`<dt>WAITING</dt><dd style="color:var(--orange)">${esc(p.wait)}</dd>`:""}<dt>STARTED</dt><dd style="font-family:var(--mono)">${p.created?esc(p.created):"NO DATE · ADD created: TO THE NOTE"}</dd><dt>UPDATED</dt><dd style="font-family:var(--mono)">${esc(p.updated)}${p.stale?` · <span class="stale">${p.stale} DAYS, STALE</span>`:""}</dd><dt>NOTE</dt><dd><a href="${esc(p.link)}">Open in Obsidian</a> <span style="font-family:var(--mono);font-size:11px;color:var(--dim);overflow-wrap:anywhere">${esc(p.note)}.md</span></dd></dl>`;
+    <dl class="kv"><dt>NEXT</dt><dd>${esc(p.next||"Topped out "+(p.completed||""))}</dd>${p.wait?`<dt>WAITING</dt><dd style="color:var(--orange)">${esc(p.wait)}</dd>`:""}<dt>STARTED</dt><dd style="font-family:var(--mono)">${p.created?esc(p.created):"NO DATE · ADD created: TO THE NOTE"}</dd><dt>UPDATED</dt><dd style="font-family:var(--mono)">${esc(p.updated)}${p.stale?` · <span class="stale">${p.stale} DAYS, STALE</span>`:""}</dd><dt>NOTE</dt><dd>${p.link?`<a href="${esc(p.link)}">Open in Obsidian</a> `:""}<span style="font-family:var(--mono);font-size:11px;color:var(--dim);overflow-wrap:anywhere">${esc(p.note)}.md</span></dd></dl>`;
   if(focus&&window.focusBuilding)focusBuilding(id);
   if(window.drawBoard)drawBoard();
 }
@@ -408,9 +408,6 @@ const LANDMARKS=[
   {kind:"athletics",model:"arena",name:"Arena",w:9,wall:0xd2488f,neon:NEON.pink},
   {kind:"career",model:"deco-tower",name:"Deco office tower",w:5.2,wall:0xb23a86,neon:NEON.pink},
 ];
-// Landmarks exist since this date. A kind's first landing before it counts as landing on it, so the pieces for kinds that
-// had already landed take blocks past the lots in use today, and no building moved when they arrived
-const LANDMARK_EPOCH="2026-10-12";
 const HERO={geo:{},failed:[],ready:false,source:typeof MODELS==="object"&&MODELS?Object.keys(MODELS):[]};
 function loadModels(){
   const names=HERO.source;
@@ -669,23 +666,29 @@ const blockOpenLevel=k=>k<OPEN_BASE?1:2+Math.ceil((k-OPEN_BASE+1)/OPEN_PER_LEVEL
 // up to the landing's date (plus the three zoned lots), and the block is a seeded pick among the next six. Projects created
 // after that skip the block. All of it comes from the notes' dates, so every machine places it the same and it never moves.
 function landmarkPlan(order){const plan={blocks:{},info:{}};const dated=order.filter(p=>p.created);
-  const firsts=[];LANDMARKS.forEach(L=>{const landed=order.filter(p=>p.kind===L.kind&&p.lane==="landed").map(p=>({p,d:p.completed||p.updated||p.created||""}))
+  const firsts=[];LANDMARKS.forEach(L=>{const landed=order.filter(p=>p.kind===L.kind&&p.lane==="landed").map(p=>({p,d:(/^\d{4}-\d{2}-\d{2}$/.test(p.completed)?p.completed:"")||p.created||""}))
     .sort((a,b)=>cmpStr(a.d,b.d)||cmpStr(a.p.name,b.p.name));if(!landed.length)return;
-    const d=landed[0].d>LANDMARK_EPOCH?landed[0].d:LANDMARK_EPOCH;firsts.push({L,p:landed[0].p,date:d,raw:landed[0].d})});
+    firsts.push({L,p:landed[0].p,date:landed[0].d,raw:landed[0].d})});
   // earlier landmarks never move for later ones: each picks on its own, and only a later one steps aside on a clash.
-  // Order: the landing date (clamped to the epoch), then the real landing date, then the kind
+  // Order: the landing date, then the kind
   firsts.sort((a,b)=>cmpStr(a.date,b.date)||cmpStr(a.raw,b.raw)||cmpStr(a.L.kind,b.L.kind));
   // the pick among the next six free blocks is weighted by the distance (in blocks, the larger of the two axes) to the
   // nearest landmark already standing: a block that touches one, even at a corner, weighs nothing while any other is free,
   // and the rest weigh the squared distance less one. If all six touch, the six after them are tried. With none standing
-  // the six weigh the same, which is the plain seeded pick the first landmark (the factory, block 10) was placed with
+  // the six weigh the same, which is the plain seeded pick the first landmark is placed with
   const taken=new Set(),placed=[];
-  firsts.forEach(({L,p,date})=>{const n0=dated.filter(q=>q.created<=date).length,first=Math.floor((n0+3)/4)+1;
+  firsts.forEach(({L,p,date})=>{const n0=dated.filter(q=>q.created<=date).length;
+    // the first block past the lots of every project started by that date. Blocks already taken by a landmark hold no
+    // lots, so they are skipped when counting (with none taken this is the block after lot n0)
+    let first=1,room=0;while(room<n0){if(!taken.has(first))room+=4;first++}
     const weigh=b=>{if(!placed.length)return 1;const [i,j]=blockPos(b);let d=1e9;placed.forEach(([pi,pj])=>d=Math.min(d,Math.max(Math.abs(i-pi),Math.abs(j-pj))));return Math.max(0,d-1)**2};
     let cands=[];for(let b=first;cands.length<6;b++)if(!taken.has(b))cands.push(b);
     let w=cands.map(weigh);
-    // every one of the six touches a landmark: look at the six after them; if those touch too, the first six weigh the same
-    if(!w.some(x=>x>0)){const more=[];for(let b=cands[5]+1;more.length<6;b++)if(!taken.has(b))more.push(b);const wm=more.map(weigh);if(wm.some(x=>x>0)){cands=more;w=wm}else w=w.map(()=>1)}
+    // every one of the six touches a landmark: look at the six after them, and on outward (up to 20 groups), until some
+    // block touches none. Only if none does do the first six weigh the same
+    if(!w.some(x=>x>0)){let last=cands[5],found=false;
+      for(let g=0;g<20&&!found;g++){const more=[];for(let b=last+1;more.length<6;b++)if(!taken.has(b))more.push(b);last=more[5];const wm=more.map(weigh);if(wm.some(x=>x>0)){cands=more;w=wm;found=true}}
+      if(!found)w=w.map(()=>1)}
     const total=w.reduce((a,x)=>a+x,0),r=mulberry(hashStr(L.kind+"|"+p.id+"|"+date))()*total;let acc=0,bk=cands[cands.length-1];
     for(let k=0;k<cands.length;k++){acc+=w[k];if(r<acc){bk=cands[k];break}}
     taken.add(bk);placed.push(blockPos(bk));const near=placed.length>1?Math.min(...placed.slice(0,-1).map(([pi,pj])=>Math.max(Math.abs(blockPos(bk)[0]-pi),Math.abs(blockPos(bk)[1]-pj)))):null;
@@ -1006,7 +1009,8 @@ function animateChanges(prev,prevLevel){
 // ---------- since your last visit: kept in this browser, one record per machine ----------
 // A record holds the state at the start of this sitting (base) and the latest state seen (cur).
 // Opening again within 30 minutes of the last look keeps the same base, so a reload does not lose the strip.
-const SITTING_MS=30*60*1000,VISIT_KEY=s=>"mc-visit-v1:"+s;
+// pages opened from file:// share one browser storage, so the demo page keeps its own records and never touches yours
+const SITTING_MS=30*60*1000,VISIT_KEY=s=>(BUILD.demo?"mc-visit-demo-v1:":"mc-visit-v1:")+s;
 const stateMap=ps=>Object.fromEntries(ps.map(p=>[p.id,{lit:p.lit,floors:p.floors,lane:p.lane,code:p.code,name:p.name,progress:p.progress}]));
 const nowState=()=>({at:Date.now(),map:stateMap(PROJECTS),xp:STATS.xp,level:LEVEL});
 function loadVisit(src){try{const r=JSON.parse(store.get(VISIT_KEY(src))||"null");return r&&r.base&&r.cur&&r.base.map&&r.cur.map?r:null}catch(e){return null}}
@@ -1043,7 +1047,7 @@ $("since").addEventListener("click",e=>{const b=e.target.closest("button[data-id
 const ISO=Math.PI/2-Math.atan(1/Math.SQRT2);   // the classic isometric angle from the vertical (elevation 35.26°)
 let az=Math.PI/4,rad=111,fitR=111,tgt=new THREE.Vector3(0,4,0),drag=null,spinOn=!reduce&&store.get("mc-spin")==="on",idleAt=-1e9,spinV=0,tgtGoal=null;
 const IDLE_MS=10000,spinBtn=$("spin"),ZOOMK=.4;
-// spin is off by default and remembered per browser (Robin, 2026-10-12). Setting it from code (tests, focus) does not change the memory
+// spin is off by default and remembered per browser. Setting it from code (tests, focus) does not change the memory
 function setSpin(on,remember){spinOn=on;if(on)idleAt=-1e9;spinBtn.setAttribute("aria-pressed",on);spinBtn.textContent=on?"⟳ SPIN ON":"■ SPIN OFF";if(remember)store.set("mc-spin",on?"on":"off")}
 setSpin(spinOn);
 spinBtn.addEventListener("click",()=>setSpin(!spinOn,true));
@@ -1252,27 +1256,28 @@ function flashFloor(b,f){const r=b.floors[f].rect;FX.flash.position.set(r.x,r.y,
 
 // ---------- render: everything that depends on the data. Called at load and after each refresh ----------
 function render(data){
-  PROJECTS=data.projects||[];WARNINGS=data.warnings||[];
+  PROJECTS=data.projects||[];WARNINGS=data.warnings||[];if(data.settings)SETTINGS=data.settings;
   renderPanels();buildCity();
   const keep=selected&&PROJECTS.some(p=>p.id===selected);
   if(!keep&&deselected&&PROJECTS.length){deselect();return}
   select(keep?selected:(PROJECTS.find(p=>p.lane==="ready")||PROJECTS[0]||{}).id,!keep);
 }
 
-// ---------- live refresh: read the vault folder in the page (Chrome or Edge, File System Access API) ----------
+// ---------- live refresh: read the folder of notes in the page (Chrome or Edge, File System Access API) ----------
 // The folder handle is kept in IndexedDB, so the folder is picked once per browser. Chrome may still ask
-// "Allow" once per session before the page can read it again; that click is the ALLOW VAULT ACCESS button.
+// "Allow" once per session before the page can read it again; that click is the ALLOW FOLDER ACCESS button.
 const LIVE_OK=BUILD.live&&typeof window.showDirectoryPicker==="function"&&window.isSecureContext;
+const HANDLE_KEY=BUILD.demo?"vault-demo":"vault"; // the demo page remembers its own folder, apart from your page's
 const connectBtn=$("connect"),refreshBtn=$("refresh"),src=$("src");
 let handle=null,mode="snapshot",lastRefresh=0,busy=false;
 const clock=d=>d.toLocaleTimeString([],{hour:"2-digit",minute:"2-digit",second:"2-digit"});
 function setSrc(kind,label,rest){src.className="src "+kind;src.innerHTML=`<b>${esc(label)}</b>${rest?" · "+esc(rest):""}`}
-const snapLabel=rest=>setSrc("snap","SNAPSHOT FROM "+SNAPSHOT.built,rest);
+const snapLabel=rest=>setSrc("snap",BUILD.demo?"DEMO CITY":"SNAPSHOT FROM "+SNAPSHOT.built,rest);
 function setButtons(){connectBtn.hidden=refreshBtn.hidden=!LIVE_OK;
-  connectBtn.textContent=!handle?"CONNECT VAULT":mode==="live"?"CHANGE VAULT":"ALLOW VAULT ACCESS";
+  connectBtn.textContent=!handle?"CONNECT FOLDER":mode==="live"?"CHANGE FOLDER":"ALLOW FOLDER ACCESS";
   connectBtn.classList.toggle("go",mode!=="live");refreshBtn.disabled=!handle||busy;
-  connectBtn.title=mode==="live"?"Pick a different vault folder":"Let this page read the vault folder";
-  refreshBtn.title="Re-read every project note in the vault";}
+  connectBtn.title=mode==="live"?"Pick a different folder":"Let this page read your folder of project notes";
+  refreshBtn.title="Re-read every project note in the folder";}
 function idb(){return new Promise((res,rej)=>{const r=indexedDB.open("mission-control",1);r.onupgradeneeded=()=>r.result.createObjectStore("kv");r.onsuccess=()=>res(r.result);r.onerror=()=>rej(r.error)})}
 async function idbGet(k){const db=await idb();try{return await new Promise((res,rej)=>{const r=db.transaction("kv").objectStore("kv").get(k);r.onsuccess=()=>res(r.result);r.onerror=()=>rej(r.error)})}finally{db.close()}}
 async function idbPut(k,val){const db=await idb();try{await new Promise((res,rej)=>{const t=db.transaction("kv","readwrite");t.objectStore("kv").put(val,k);t.oncomplete=res;t.onerror=()=>rej(t.error);t.onabort=()=>rej(t.error)})}finally{db.close()}}
@@ -1282,9 +1287,9 @@ async function refresh(userClick){
   try{
     let st=await handle.queryPermission({mode:"read"});
     if(st!=="granted"&&userClick)st=await ask(handle);
-    if(st!=="granted"){mode="needs-permission";snapLabel(st==="denied"?"VAULT ACCESS NOT ALLOWED. CLICK ALLOW VAULT ACCESS TO TRY AGAIN":"CLICK ALLOW VAULT ACCESS TO GO LIVE");if(!visit||visit.src!=="live")renderSince("CLICK ALLOW VAULT ACCESS TO SEE WHAT CHANGED SINCE YOUR LAST VISIT.");return}
-    const data=await MCParser.collectVault(handle,{vaultName:BUILD.vault});
-    const changed=JSON.stringify(data)!==JSON.stringify({projects:PROJECTS,warnings:WARNINGS});
+    if(st!=="granted"){mode="needs-permission";snapLabel(st==="denied"?"FOLDER ACCESS NOT ALLOWED. CLICK ALLOW FOLDER ACCESS TO TRY AGAIN":"CLICK ALLOW FOLDER ACCESS TO GO LIVE");if(!visit||visit.src!=="live")renderSince("CLICK ALLOW FOLDER ACCESS TO SEE WHAT CHANGED SINCE YOUR LAST VISIT.");return}
+    const data=await MCParser.collectVault(handle);
+    const changed=JSON.stringify(data)!==JSON.stringify({projects:PROJECTS,warnings:WARNINGS,settings:SETTINGS});
     // the first live read of this visit is compared with the last visit; later ones with the last refresh
     if(!visit||visit.src!=="live"){if(changed)render(data);beginVisit("live")}
     else{const prev=stateMap(PROJECTS),prevLevel=LEVEL;if(changed){render(data);animateChanges(prev,prevLevel)}noteVisit()}
@@ -1296,17 +1301,19 @@ async function refresh(userClick){
 }
 async function pickVault(){
   let h;try{h=await window.showDirectoryPicker({id:"mc-vault",mode:"read"})}catch(e){if(e.name!=="AbortError")setSrc("err","FOLDER PICKER FAILED",e.message);return}
-  try{await h.getDirectoryHandle("Projects")}catch(e){setSrc("err","NOT THE VAULT",`"${h.name}" has no Projects folder. Pick the vault folder itself.`);return}
+  // a folder with no project notes in it is almost always the wrong pick: say so and keep what is on screen
+  let found;try{found=await MCParser.collectVault(h)}catch(e){setSrc("err","CANNOT READ THAT FOLDER",e.message||e.name);return}
+  if(!found.projects.length){setSrc("err","NO PROJECT NOTES",`"${h.name}" has no project notes the page can use${found.warnings.length?` (${found.warnings.length} warning${found.warnings.length===1?"":"s"}, for example: ${found.warnings[0]})`:""}. Pick the folder that holds your project notes.`);return}
   // a different folder starts a fresh comparison
   if(handle&&mode==="live"&&visit&&visit.src==="live")visit=null;
   handle=h;mode="snapshot";
-  try{await idbPut("vault",h)}catch(e){/* not stored (e.g. private window): live for this visit only */}
+  try{await idbPut(HANDLE_KEY,h)}catch(e){/* not stored (e.g. private window): live for this visit only */}
   await refresh(true);
 }
 connectBtn.addEventListener("click",async()=>{
   if(handle&&mode!=="live"){const st=await ask(handle);if(st==="granted"){await refresh(true);return}
-    if(st==="denied"){handle=null;mode="snapshot";setButtons();snapLabel("VAULT ACCESS NOT ALLOWED. CLICK CONNECT VAULT TO PICK THE FOLDER AGAIN");return}
-    snapLabel("CLICK ALLOW VAULT ACCESS TO GO LIVE");return}
+    if(st==="denied"){handle=null;mode="snapshot";setButtons();snapLabel("FOLDER ACCESS NOT ALLOWED. CLICK CONNECT FOLDER TO PICK IT AGAIN");return}
+    snapLabel("CLICK ALLOW FOLDER ACCESS TO GO LIVE");return}
   await pickVault();
 });
 refreshBtn.addEventListener("click",()=>refresh(true));
@@ -1315,20 +1322,21 @@ async function boot(){
   await loadModels();
   render(SNAPSHOT);
   requestAnimationFrame(frame);
-  // the snapshot counts as a visit only where the page cannot go live: the phone mirror, a browser
-  // without folder access, or a vault not connected yet. Otherwise the live read is compared.
-  if(!BUILD.live){snapLabel("PHONE MIRROR. IT CANNOT READ THE VAULT");beginVisit("snap");return}
-  if(!LIVE_OK){snapLabel("LIVE REFRESH NEEDS CHROME OR EDGE");beginVisit("snap");return}
-  setButtons();snapLabel("CLICK CONNECT VAULT TO GO LIVE");
-  try{handle=window.MC_TEST_HANDLE||await idbGet("vault")||null}catch(e){handle=null}
-  if(!handle){setButtons();beginVisit("snap");return}
+  // the snapshot counts as a visit only where the page cannot go live: a snapshot-only build, a browser
+  // without folder access, or a folder not connected yet. Otherwise the live read is compared. The demo city never counts.
+  const demoNote="THIS IS A DEMO CITY. CONNECT A FOLDER OF PROJECT NOTES TO BUILD YOURS.";
+  if(!BUILD.live){snapLabel("SNAPSHOT ONLY. THIS PAGE CANNOT READ THE FOLDER");if(BUILD.demo)renderSince(demoNote);else beginVisit("snap");return}
+  if(!LIVE_OK){snapLabel("LIVE REFRESH NEEDS CHROME OR EDGE");if(BUILD.demo)renderSince(demoNote);else beginVisit("snap");return}
+  setButtons();snapLabel("CLICK CONNECT FOLDER TO GO LIVE");
+  try{handle=window.MC_TEST_HANDLE||await idbGet(HANDLE_KEY)||null}catch(e){handle=null}
+  if(!handle){setButtons();if(BUILD.demo)renderSince(demoNote);else beginVisit("snap");return}
   let st="prompt";try{st=await handle.queryPermission({mode:"read"})}catch(e){}
   if(st==="granted")await refresh(false);
-  else{mode="needs-permission";setButtons();snapLabel("CLICK ALLOW VAULT ACCESS TO GO LIVE");renderSince("CLICK ALLOW VAULT ACCESS TO SEE WHAT CHANGED SINCE YOUR LAST VISIT.")}
+  else{mode="needs-permission";setButtons();snapLabel("CLICK ALLOW FOLDER ACCESS TO GO LIVE");renderSince("CLICK ALLOW FOLDER ACCESS TO SEE WHAT CHANGED SINCE YOUR LAST VISIT.")}
 }
 window.MC={render,refresh:()=>refresh(true),launch:()=>{ROCKET.next=0},setQuality:q=>setQuality(q,true),sample:samplePixels,
   project:(x,y,z)=>{const v=_v.set(x,y,z).project(camera);return[(v.x+1)/2,(v.y+1)/2]},dropModel:n=>{if(HERO.geo[n]){delete HERO.geo[n];HERO.failed.push(n);return true}return false},
-  plan:(n,lv,withLm)=>{const p=planLots(n,lv,withLm?landmarkPlan(PROJECTS.slice().sort(byStart)):null);return{blocks:p.blocks,ring:p.R,order:[...new Set(p.lots.map(l=>l.i+","+l.j))],lots:p.lots.filter(l=>!l.square&&!l.landmark).slice(0,n).map(l=>l.x+","+l.z),landmarks:[...new Set(p.lots.filter(l=>l.landmark).map(l=>l.landmark+"@"+l.block))]}},look:(id,r,a)=>{const b=buildings.find(x=>x.p.id===id);if(!b)return false;setSpin(false);if(a!==undefined)az=a;rad=r||30;tgtGoal=null;tgt.set(b.pos.x,Math.min(8,b.topY*.4+1),b.pos.z);return true},view:(a,p,r)=>{az=a;rad=r;setSpin(false);tgtGoal=null;tgt.set(0,4,0)},state:()=>({mode,lastRefresh,projects:PROJECTS,warnings:WARNINGS,level:LEVEL,stats:STATS,buildings:buildings.length,
+  plan:(n,lv,withLm)=>{const p=planLots(n,lv,withLm?landmarkPlan(PROJECTS.slice().sort(byStart)):null);return{blocks:p.blocks,ring:p.R,order:[...new Set(p.lots.map(l=>l.i+","+l.j))],lots:p.lots.filter(l=>!l.square&&!l.landmark).slice(0,n).map(l=>l.x+","+l.z),landmarks:[...new Set(p.lots.filter(l=>l.landmark).map(l=>l.landmark+"@"+l.block))]}},look:(id,r,a)=>{const b=buildings.find(x=>x.p.id===id);if(!b)return false;setSpin(false);if(a!==undefined)az=a;rad=r||30;tgtGoal=null;tgt.set(b.pos.x,Math.min(8,b.topY*.4+1),b.pos.z);return true},view:(a,p,r)=>{az=a;rad=r;setSpin(false);tgtGoal=null;tgt.set(0,4,0)},state:()=>({mode,lastRefresh,projects:PROJECTS,warnings:WARNINGS,settings:SETTINGS,level:LEVEL,stats:STATS,buildings:buildings.length,
   towers:buildings.map(b=>({id:b.p.id,floors:b.N,shown:b.shown,lane:b.p.lane,crown:b.crownSlots.length>0,kind:b.p.kind,roof:b.shown>=b.N,height:+(b.topY).toFixed(2),stale:b.stale,
     lights:b.mode,holoFull:b.holoFull,ringWide:!!b.ringSlot,net:b.floors.reduce((n,f)=>n+(f.net.length&&f.net[0][0].list[f.net[0][1]].on?1:0),0),
     tarp:b.floors.some(f=>f.tarp.length>0&&f.tarp[0][0].list[f.tarp[0][1]].on),x:+b.pos.x.toFixed(2),z:+b.pos.z.toFixed(2),lot:b.lot.rank,ring:b.lot.ring,created:b.p.created,kit:b.kit.hash,foot:b.kit.foot,

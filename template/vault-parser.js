@@ -1,9 +1,9 @@
-/* Mission Control vault parser.
- * A line-for-line port of collect() in build.py, so the page can read the vault itself.
- * Keep the two in step: tests/run_tests.cjs checks them against each other on a real vault.
+/* Mission Control parser.
+ * A line-for-line port of read_settings(), note_files() and collect() in build.py, so the page can read
+ * the folder of project notes itself. Keep the two in step: tests/run_tests.cjs checks them against each other.
  * Works in the browser (window.MCParser) and in Node (module.exports).
- * Input: a directory handle (File System Access API) for the vault root, or anything with
- * the same shape: getDirectoryHandle(name), entries(), and getFile() on file handles. */
+ * Input: a directory handle (File System Access API) for the folder, or anything with the same
+ * shape: name, getDirectoryHandle(name), getFileHandle(name), entries(), and getFile() on file handles. */
 (function (root) {
   "use strict";
   const LANES = ["ready", "waiting", "blocked", "parked", "landed"];
@@ -13,6 +13,10 @@
   const STALE_DAYS = 30;
   const XP_PER_LEVEL = 30; // city XP per level. XP = lit floors, plus the building's floors again when it lands
   const ACTIVE_DAYS = 7; // a project counts as active (traffic on the roads) when `updated` is this many days old or less
+  const SETTINGS_NOTE = "mission-control.md"; // optional, at the folder root: title, folders, links, obsidianVault, out
+  const DEFAULT_TITLE = "MY PROJECTS";
+  // folders never read: hidden ones (.obsidian, .git, .trash), node_modules, and Templates (a template note is not a project)
+  const skipDir = name => name.startsWith(".") || name === "node_modules" || name.toLowerCase() === "templates";
   // progress % of the building's floors, rounded half up. Integer maths, so it matches build.py exactly
   const litFloors = (progress, floors) => Math.floor((2 * progress * floors + 100) / 200);
   function cityStats(projects) {
@@ -143,7 +147,7 @@
   const slug = s => stripChars(s.toLowerCase().replace(/[^a-z0-9]+/g, "-"), "-");
 
   // One note -> a project object, null (not a project, or skipped), plus any warnings
-  function parseNote(rel, fn, text, lastModified, today, vaultName, warnings) {
+  function parseNote(rel, fn, text, lastModified, today, settings, warnings) {
     const [fm, body] = parseFrontmatter(text);
     if (!fm || Object.keys(fm).length === 0 || fm.type !== "project") return null;
     const get = k => fm[k];
@@ -205,31 +209,89 @@
       north: s("northstar"), next: s("next"), wait: s("waiting_on"), updated, created,
       completed: s("completed"), stale, days, area: s("area"), kind, size,
       floors: SIZE_FLOORS[size], lit: litFloors(progress, SIZE_FLOORS[size]), note: rel,
-      link: "obsidian://open?vault=" + vaultName + "&file=" + quote(rel),
+      link: settings.links === "obsidian" ? "obsidian://open?vault=" + quote(settings.vault) + "&file=" + quote(rel) : "",
     };
   }
 
+  // a folder that cannot be listed is skipped, as Python's os.walk does
   async function* walk(dir, prefix) {
-    for await (const [name, h] of dir.entries()) {
-      if (h.kind === "directory") yield* walk(h, prefix + name + "/");
+    const list = [];
+    try { for await (const e of dir.entries()) list.push(e); } catch (e) { return; }
+    for (const [name, h] of list) {
+      if (h.kind === "directory") { if (!skipDir(name)) yield* walk(h, prefix + name + "/"); }
       else yield [prefix + name, name, h];
     }
+  }
+  const decoder = new TextDecoder("utf-8", { fatal: true }); // strips a BOM, like utf-8-sig
+  async function readText(h) {
+    const f = await h.getFile();
+    return { text: decoder.decode(await f.arrayBuffer()).replace(/\r\n?/g, "\n"), lastModified: f.lastModified }; // Python's universal newlines
+  }
+  // a folder from the settings note as a clean relative path: / for \\, no empty or "." parts. "" is the whole folder
+  const normFolder = f => f.split("\\").join("/").split("/").filter(x => strip(x) !== "" && strip(x) !== ".").join("/");
+
+  // The optional settings note -> {settings shared with build.py, warnings}
+  async function readSettings(vault) {
+    const warnings = [];
+    let fm = null, fh = null;
+    try { fh = await vault.getFileHandle(SETTINGS_NOTE); } catch (e) { fh = null; }
+    if (fh) {
+      try { fm = parseFrontmatter((await readText(fh)).text)[0]; }
+      catch (e) { warnings.push(SETTINGS_NOTE + ": unreadable; using the defaults"); }
+    }
+    fm = fm || Object.create(null);
+    let folders = truthy(fm.folders) ? fm.folders : [];
+    if (!Array.isArray(folders)) folders = [folders];
+    const seen = [];
+    for (const f of folders) { const n = normFolder(f); if (!seen.includes(n)) seen.push(n); }
+    let hasObsidian = false;
+    try { await vault.getDirectoryHandle(".obsidian"); hasObsidian = true; } catch (e) { hasObsidian = false; }
+    const auto = hasObsidian ? "obsidian" : "none";
+    let links = (truthy(fm.links) ? pyStr(fm.links) : "").toLowerCase();
+    if (!links) links = auto;
+    else if (links !== "obsidian" && links !== "none") {
+      warnings.push(SETTINGS_NOTE + ": links '" + links + "' is not obsidian or none; using " + auto);
+      links = auto;
+    }
+    const settings = {
+      title: (truthy(fm.title) ? pyStr(fm.title) : "") || DEFAULT_TITLE,
+      folders: seen,
+      links,
+      vault: (truthy(fm.obsidianVault) ? pyStr(fm.obsidianVault) : "") || vault.name,
+    };
+    return { settings, warnings };
+  }
+
+  // [path, file name, handle] for every .md note to read: the whole folder, or only the settings' folders
+  async function noteFiles(vault, settings, warnings) {
+    const files = [], seen = new Set();
+    for (const top of (settings.folders.length ? settings.folders : [""])) {
+      const parts = top ? top.split("/") : [];
+      let dir = vault;
+      try {
+        if (parts.includes("..") || top.includes(":")) throw new Error("outside");
+        for (const p of parts) dir = await dir.getDirectoryHandle(p);
+      } catch (e) {
+        warnings.push(SETTINGS_NOTE + ": folder '" + top + "' not found");
+        continue;
+      }
+      for await (const [path, fn, h] of walk(dir, top ? top + "/" : "")) {
+        if (!fn.endsWith(".md") || path === SETTINGS_NOTE || seen.has(path)) continue;
+        seen.add(path);
+        files.push([path, fn, h]);
+      }
+    }
+    return files;
   }
 
   const sortProjects = list => list.sort((a, b) => (LANES.indexOf(a.lane) - LANES.indexOf(b.lane)) || (b.progress - a.progress) || cmp(a.name, b.name) || cmp(a.note, b.note));
 
-  // The vault root handle -> {projects, warnings}. today: "YYYY-MM-DD" in local time.
+  // The folder handle -> {projects, warnings, settings}. today: "YYYY-MM-DD" in local time.
   async function collectVault(vault, opts) {
     const today = (opts && opts.today) || localISODate(Date.now());
-    const vaultName = (opts && opts.vaultName) || "robin-personal";
-    const files = [];
-    for (const top of ["Projects", "Archive"]) {
-      let dir;
-      try { dir = await vault.getDirectoryHandle(top); } catch (e) { continue; }
-      for await (const [path, fn, h] of walk(dir, top + "/")) if (fn.endsWith(".md")) files.push([path, fn, h]);
-    }
-    const projects = [], warnings = [];
-    const decoder = new TextDecoder("utf-8", { fatal: true }); // strips a BOM, like utf-8-sig
+    const { settings, warnings } = await readSettings(vault);
+    const files = await noteFiles(vault, settings, warnings);
+    const projects = [];
     let i = 0;
     async function worker() {
       while (i < files.length) {
@@ -237,22 +299,20 @@
         const rel = path.slice(0, -3);
         let text, lastModified;
         try {
-          const f = await h.getFile();
-          lastModified = f.lastModified;
-          text = decoder.decode(await f.arrayBuffer()).replace(/\r\n?/g, "\n"); // Python's universal newlines
+          ({ text, lastModified } = await readText(h));
         } catch (e) {
           warnings.push(rel + ".md: unreadable, skipped");
           continue;
         }
-        const p = parseNote(rel, fn, text, lastModified, today, vaultName, warnings);
+        const p = parseNote(rel, fn, text, lastModified, today, settings, warnings);
         if (p) projects.push(p);
       }
     }
     await Promise.all(Array.from({ length: 16 }, worker));
-    return { projects: sortProjects(projects), warnings: warnings.sort(cmp) };
+    return { projects: sortProjects(projects), warnings: warnings.sort(cmp), settings };
   }
 
-  const api = { collectVault, parseFrontmatter, titleOf, slug, parseNote, localISODate, cityStats, litFloors, LANES, KINDS, SIZES, SIZE_FLOORS, XP_PER_LEVEL, ACTIVE_DAYS };
+  const api = { collectVault, readSettings, SETTINGS_NOTE, parseFrontmatter, titleOf, slug, parseNote, localISODate, cityStats, litFloors, LANES, KINDS, SIZES, SIZE_FLOORS, XP_PER_LEVEL, ACTIVE_DAYS };
   if (typeof module !== "undefined" && module.exports) module.exports = api;
   else root.MCParser = api;
 })(typeof window !== "undefined" ? window : globalThis);
